@@ -21,7 +21,7 @@ csl: ieee.csl
 code-links:
   - text: Notebook code
     icon: github
-    href: https://github.com/chrisenz/Analog-Circuit-Design/tree/main/SC-Circuits/Simulation%20of%20SC%20Circuits
+    href: https://github.com/chrisenz/CMOS-Analog-Integrated-Circuit-Design-using-the-Inversion-Coefficient/tree/main/12.Switched-capacitor%20Circuits/Notebooks/Simulation%20of%20SC%20Circuits
 format: 
   html:
     include-in-header: mathjax.html
