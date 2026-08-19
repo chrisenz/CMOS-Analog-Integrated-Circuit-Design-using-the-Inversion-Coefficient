@@ -1,0 +1,4602 @@
+---
+title: Improved Voltage Followers
+subtitle: Version 1
+author: Christian Enz (christian.enz@epfl.ch)
+affiliation: EPFL
+date: 07/21/2026
+date-modified: last-modified
+date-format: "DD.MM.YYYY"
+license: CC BY-NC-SA
+abstract: |
+  This notebook presents improved voltage followers including the super source follower (SSF) and the flipped voltage follower (FVF). It looks in particular to the frequency response and stability of these circuits.
+execute:
+  echo: false
+  warning: false
+toc: true
+number-sections: true
+number-depth: 4
+highlight-style: pygments
+bibliography: references.bib
+csl: ieee.csl
+code-links:
+  - text: Notebook code
+    icon: github
+    href: https://github.com/chrisenz/CMOS-Analog-Integrated-Circuit-Design-using-the-Inversion-Coefficient/tree/main/07.Basic%20Building%20Blocks/Notebooks/Improved%20Voltage%20Followers
+format: 
+  html:
+    include-in-header: mathjax.html
+    code-fold: true
+    html-math-method: mathjax
+    css: styles.css
+    default-image-extension: svg
+  pdf:
+    keep-tex: true
+    pdf-engine: pdflatex
+    documentclass: scrreprt
+    papersize: a4
+    default-image-extension: pdf
+    geometry:
+      - top=20mm
+      - bottom=20mm
+      - left=20mm
+      - right=20mm
+    include-in-header:
+      text: |
+        \usepackage{scrlayer-scrpage}
+        \usepackage{datetime2}
+        \DTMsetup{datesep=.}
+        \DTMsetstyle{ddmmyyyy}
+        \rohead[\thepage]{\thepage}
+        \cohead[Improved Voltage Followers]{Improved Voltage Followers}
+        \lofoot[$\copyright$ C. Enz under CC BY-NC-SA]{$\copyright$ C. Enz under CC BY-NC-SA}
+        \cofoot[]{}
+        \rofoot[\today]{\today}
+---
+
+```{python}
+# Initialization
+
+from ekv_functions import *
+from constants import *
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import subprocess
+import shutil
+import os
+import os.path as op
+import sys
+sys.path.append(".")
+import re
+
+from IPython.display import Markdown
+from tabulate import tabulate
+
+plt.rcParams['svg.fonttype'] = 'none'
+plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams['font.family'] = 'Arial'
+plt.rcParams['mathtext.fontset'] = 'custom'
+plt.rcParams['mathtext.rm'] = 'Arial'
+plt.rcParams['mathtext.it'] = 'Arial:italic'
+plt.rcParams['mathtext.bf'] = 'Arial:bold'
+
+inkscapePath = r"C:\\Program Files\\Inkscape\bin\\inkscape.exe"
+savePlotPath = "./Figures/"
+#savePlots=True
+savePlots=False
+
+lw=1
+curvelw=1
+msize=5
+textFontSize=9
+BodePlotParams = {'figure.figsize': (5,5)}
+pltStyle='plt_style_small.mplstyle'
+
+plt.style.use(pltStyle)
+
+#newSim=True
+newSim=False
+
+refloat=r'.*?([+-]?\d+([.]\d*)?([eE][+-]?\d+)?|[.]\d+([eE][+-]?\d+)?)'
+
+def saveFigures(savePath, plotName):
+#  print("Patience, saving plot!")
+  figFolder = savePath + r"\\{}.{}"
+  pngFile = figFolder.format(plotName,"png")
+  pdfFile = figFolder.format(plotName,"pdf")
+  svgFile = figFolder.format(plotName,"svg")
+  plt.savefig(pngFile, format="png", dpi=1200, bbox_inches="tight", transparent=True)
+  plt.savefig(pdfFile, format="pdf", dpi=1200, bbox_inches="tight", transparent=True)
+  plt.savefig(svgFile, format="svg", dpi=1200, bbox_inches="tight", transparent=True)
+  cmd_emf = '"{}" "{}\\{}.svg" --export-filename="{}\\{}.emf" --export-overwrite'.format(inkscapePath, savePath, plotName, savePath, plotName)
+#    cmd_emf = '"{}" "{}\{}.pdf" --export-filename="{}\{}.emf" --export-overwrite'.format(inkscapePath, savePath, plotName, savePath, plotName)
+#    cmd_pdf = '"{}" "{}\{}.svg" --export-filename="{}\{}.pdf" --export-overwrite'.format(inkscapePath, savePath, plotName, savePath, plotName)
+  subprocess.call(cmd_emf, shell=True)
+#    subprocess.call(cmd_pdf, shell=True)
+
+def diff(y, dx):
+    N=len(y)
+    dydx=np.zeros(N)
+    dydx[0]=(y[1]-y[0])/dx
+    dydx[1]=(y[2]-y[0])/(2*dx)
+    for k in range(2,N-2):
+        dydx[k]=(y[k-2]-8*y[k-1]+8*y[k+1]-y[k+2])/(12*dx)
+    dydx[N-2]=(y[N-1]-y[N-3])/(2*dx)
+    dydx[N-1]=(y[N-1]-y[N-2])/dx
+    return dydx
+```
+
+# Introduction
+This notebook studies several voltage followers @bib:gray:book:2009 @bib:ali:sscm:part1:2022, including the super source follower (SSF) @bib:ali:sscm:part3:2023 and the flipped voltage follower (FVF) @bib:carvajal:tcas1:52:7:july:2005 @bib:ali:sscm:part2:2023 which provide a much lower output resistance than the simple voltage follower (SVF).
+
+All the studied voltage followers will be simulated using ngspice with the EKV 2.6 compact model for a generic 180 nm bulk CMOS technology. The physical parameters are given in @tbl-physics_param, the global process parameters in @tbl-process_param and the transistor parameters in @tbl-mos_param.
+
+```{python}
+#| label: tbl-physics_param
+#| tbl-cap: Physical parameters
+
+from tsmc018_sekv_ekv2p6 import *
+
+table = [["$T$",f'{T:.0f}',"$K$"],
+         ["$U_T$",f'{UT/1e-3:.3f}',"$mV$"]
+         ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+```{python}
+#| label: tbl-process_param
+#| tbl-cap: Global process parameters
+
+table = [["$V_{DD}$",f'{VDD:.1f}',"$V$"],
+         ["$C_{ox}$",f'{Cox*1e3:.3f}',"$\\frac{fF}{\\mu m^2}$"],
+         ["$W_{min}$",f'{Wmin/1e-9:.0f}',"$nm$"],
+         ["$L_{min}$",f'{Lmin/1e-9:.0f}',"$nm$"]
+         ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+```{python}
+#| label: tbl-mos_param
+#| tbl-cap: Transistor process parameters
+
+table = [["sEKV parameters"],
+         ["$n$",f'{n0n:.2f}',f'{n0p:.2f}',"-"],
+         ["$I_{{spec\\Box}}$",f'{Ispecsqn/1e-9:.0f}',f'{Ispecsqp/1e-9:.0f}',"$nA$"],
+         ["$V_{{T0}}$",f'{VT0n:.3f}',f'{VT0p:.3f}',"$V$"],
+         ["$L_{{sat}}$",f'{Lsatn/1e-9:.0f}',f'{Lsatp/1e-9:.0f}',"$nm$"],
+         ["$\\lambda$",f'{lambdan*1e-6:.0f}',f'{lambdap*1e-6:.0f}',"$\\frac{{V}}{{\\mu m}}$"],
+         ["Overlap capacitances parameters"],
+         ["$C_{{GDo}}$",f'{CGDOn*1e9:.3f}',f'{CGDOp*1e9:.3f}','$\\frac{{fF}}{{\\mu m}}$'],
+         ["$C_{{GSo}}$",f'{CGSOn*1e9:.3f}',f'{CGSOp*1e9:.3f}','$\\frac{{fF}}{{\\mu m}}$'],
+         ["$C_{{GBo}}$",f'{CGBOn*1e9:.3f}',f'{CGBOp*1e9:.3f}','$\\frac{{fF}}{{\\mu m}}$'],
+         ["Junction capacitances parameters"],
+         ["$C_J$",f'{CJn*1e3:.3f}',f'{CJp*1e3:.3f}','$\\frac{{fF}}{{\\mu m^2}}$'],
+         ["$C_{{JSW}}$",f'{CJSWn*1e9:.3f}',f'{CJSWp*1e9:.3f}','$\\frac{{fF}}{{\\mu m}}$'],
+         ["Flicker noise parameters"],
+         ["$K_F$",f'{KFn:.1e}',f'{KFp:.1e}',"$J$"],
+         ["$AF$",f'{AFn:.1f}',f'{AFp:.1f}',"-"],
+         ["$\\rho$",f'{rhon:.3e}',f'{rhop:.3e}','$\\frac{{V \\cdot m^2}}{{A \\cdot s}}$'],
+         ["Matching parameters"],
+         ["$A_{{VT}}$",f'{AVTn*1e9:.0f}',f'{AVTp*1e9:.0f}',"$mV \\cdot \\mu m$"],
+         ["$A_{{\\beta}}$",f'{Abetan*1e8:.0f}',f'{Abetap*1e8:.0f}',"$\\% \\cdot \\mu m$"],
+         ["Source and drain sheet resistance parameter"],
+         ["$R_{{sh}}$",f'{RSHn:.0f}',f'{RSHp:.0f}',"$\\frac{{\\Omega}}{{\\mu m}}$"],
+         ["Width and length parameters"],
+         ["$\\Delta W$",f'{DWn/1e-9:.0f}',f'{DWp/1e-9:.0f}',"$\\,nm$"],
+         ["$\\Delta L$",f'{DLn/1e-9:.0f}',f'{DLp/1e-9:.0f}',"$\\,nm$"]
+         ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","NMOS","PMOS","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+# The simple voltage follower (SVF) {#sec-svf}
+## Introduction
+
+::: {#fig-svf-schematic layout-ncol=2}
+
+![SVF in common substrate.](Figures/svf_in_sub){width=50% #fig-ssf_in_sub}
+
+![SVF in separate well.](Figures/svf_in_sep_well){width=50% #fig-svf_in_sep_well}
+
+Schematics of the SVF.
+:::
+
+The schematic of the common-drain or simple voltage follower (SVF) is presented in @fig-svf-schematic. Transistor M~1~ can be either in the common substrate as shown in @fig-ssf_in_sub, or in a separate well as shown in @fig-svf_in_sep_well. We will see below that this has an impact of the DC gain.
+
+## Large-signal consideration
+The minimum input voltage corresponds to the input voltage at which the output voltage becomes equal to zero. It is then approximately equal to the $V_{GS}$ of M~1~ $V_{in,min} \cong V_{GS1}$ which is about equal to $V_{T0n}$ if the transistor is biased in moderate inversion. The maximum input voltage is actually equal to $V_{DD}$.
+
+## Small-signal transfer function
+
+::: {#fig-svf-small-signal layout-ncol=2}
+
+![SVF in common substrate.](Figures/svf_small-signal_in_sub){width=95% #fig-svf-small-signal}
+
+![SVF in separate well.](Figures/svf_small-signal_in_sep_well){width=70% #fig-svf_small-signal_in_sep_well}
+
+Small-signal schematics of the SVF.
+:::
+
+The small-signal schematic of the SVF are given in @fig-svf-small-signal where $G_o$ is the total conductance at the output ($G_{ds1}$ plus the output conductance of the current mirror). The voltage gain for the SVF with M~1~ in common substrate of @fig-svf-small-signal is given by
+\begin{equation}
+  A_v(s) = A_{dc}\,\frac{s/\omega_z + 1}{s/\omega_p + 1},
+\end{equation}
+with
+\begin{align}
+  A_{dc} &= \frac{G_{m1}}{G_{ms1}+G_o} \cong \frac{G_{m1}}{G_{ms1}} = \frac{1}{n_1},\\
+  \omega_z &= \frac{G_{m1}}{C_{GS1}},\\
+  \omega_p &= \frac{G_{ms1}+G_o}{C_L+C_{GS1}} \cong \frac{G_{ms1}}{C_L},
+\end{align}
+where we have assumed that $G_o \ll G_{ms1},G_{m1}$, $C_{GS1} \ll C_L$ and $G_{ms1} = n_1 \cdot G_{m1}$. We see that the DC gain is about equal to $1/n_1$ which is slightly smaller than 1. This drawback can be circumvented by putting M~1~ in a separate well as shown in @fig-svf_in_sep_well. From the corresponding small-signal circuit of @fig-svf_small-signal_in_sep_well, we now get
+\begin{align}
+  A_{dc} &= \frac{G_{m1}}{G_{m1}+G_o} \cong 1,\\
+  \omega_z &= \frac{G_{m1}}{C_{GS1}},\\
+  \omega_p &= \frac{G_{m1}+G_o}{C_L+C_{GS1}} \cong \frac{G_{m1}}{C_L},
+\end{align}
+
+At high frequency, the circuit operates like a capacitive divider and the the voltage gain is given by
+\begin{equation}
+  \lim_{s \to +\infty} A_v(s) = \frac{C_{GS1}}{C_L+C_{GS1}} \cong \frac{C_{GS1}}{C_L}.
+\end{equation}
+
+## Small-signal output resistance
+
+::: {#fig-svf-output-resistance layout-ncol=2}
+
+![SVF in common substrate.](Figures/svf_output_impedance_in_sub){width=80% #fig-svf_output_impedance_in_sub}
+
+![SVF in separate well.](Figures/svf_output_impedance_in_sep_well){width=80% #fig-svf_output_impedance_in_sep_well}
+
+Small-signal schematics of the SVF for the derivation of the output impedance.
+:::
+
+The output impedance of the SVF in common substrate can be calculated wit the help of @fig-svf_output_impedance_in_sub resulting in
+\begin{equation}
+  Z_{out} = \frac{R_{out}}{s/\omega_p + 1},
+\end{equation}
+with
+\begin{equation}
+  R_{out} = \frac{1}{G_{ms1}+G_o} \cong \frac{1}{G_{ms1}}.
+\end{equation}
+
+In the case M~1~ is in a separate well, we get
+\begin{equation}
+  R_{out} = \frac{1}{G_{m1}+G_o} \cong \frac{1}{G_{m1}}.
+\end{equation}
+
+## Design
+
+![Schematic of the SVF used for simulation.](Figures/svf_sim){width=35% #fig-svf_sim}
+
+We want to design the SVF in a separate well of @fig-svf_sim for the specifications given in @tbl-svf_specs.
+
+```{python}
+#| label: tbl-svf_specs
+#| tbl-cap: SVF specifications.
+
+BWspec=1e6
+wc=2*pi*BWspec
+CL=10e-12
+
+table = [["Minimum bandwidth","$BW$",f'{BWspec/1e6:.0f}',"$MHz$"],
+         ["Load capacitance","$C_L$",f'{CL/1e-12:.0f}',"$pF$"]
+         ]
+
+Markdown(tabulate(
+  table,
+  headers=["Specification","Symbol","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("left","center","center","center")
+))
+```
+
+```{python}
+# Sizing of M1
+Gm1=wc*CL
+IC1=1
+Ib=Gm1*n0n*UT/gmsid_ic(IC1)
+Ispec1=Ib/IC1
+WoverL1=Ispec1/Ispecsqn
+L1=1e-6
+Leff1=L1+DLn
+Weff1=WoverL1*Leff1
+W1=Weff1-DWn
+
+# Sizing of M2a-M2b
+IC2=10
+Ispec2=Ib/IC2
+WoverL2=Ispec2/Ispecsqn
+W2=Wmin
+Weff2=W2+DWn
+Leff2=Weff2/WoverL2
+L2=Leff2-DLn
+
+Vinq=VDD/2
+```
+
+We choose to bias M~1~ in moderate inversion with $IC_1 =$ `{python} f'{IC1:.0f}'`. We can then calculate the required transconductance $G_{m1} = C_L\,\omega_p =$ `{python} f'{Gm1/1e-6:.3f}'` $\mu A/V$. The required bias current is then equal to $I_b = G_{m1}\,n\,U_T/gmsid(IC_1) =$ `{python} f'{Ib/1e-6:.3f}'` $\mu A$. The $I_{spec}$ and $W/L$ are then given by $I_{spec1} =$ `{python} f'{Ispec1/1e-6:.3f}'` $\mu A$ and $(W/L)_1 =$ `{python} f'{WoverL1:.3f}'`. Choosing $L_1 =$ `{python} f'{L1/1e-6:.0f}'` $\mu m$ we get $W_1 =$ `{python} f'{W1/1e-6:.2f}'` $\mu m$.
+
+The nMOS current mirror is sized with an inversion coefficient $IC_2 =$ `{python} f'{IC2:.0f}'` resulting in $I_{spec2} =$ `{python} f'{Ispec2/1e-6:.3f}'` $\mu A$ and $(W/L)_2 =$ `{python} f'{WoverL2:.3f}'`. Choosing $W_2 = W_{min} =$ `{python} f'{W2/1e-6:.2f}'` $\mu m$, we get $L_2 =$ `{python} f'{L2/1e-6:.2f}'` $\mu m$.
+
+The transistor sizing result is summarized in @tbl-svf_transistor_info1.
+
+```{python}
+#| label: tbl-svf_transistor_info1
+#| tbl-cap: Transistor size and bias information.
+
+transistor_info={
+    "Type": ["n","n","n"],
+    "Function": ["VF","CM","CM"],
+    "W": [W1,W2,W2],
+    "L": [L1,L2,L2],
+    "ID": [Ib,Ib,Ib]
+}
+transistor_list=["M1","M2a","M2b"]
+ekv_df=pd.DataFrame(transistor_info, index=transistor_list)
+
+ekv_df["Weff"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W"]+DWn,
+                                     ekv_df["W"]+DWp)
+ekv_df["Leff"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["L"]+DLn,
+                                     ekv_df["L"]+DLp)
+ekv_df["W/L"]=ekv_df["Weff"]/ekv_df["Leff"]
+ekv_df["Ispec"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W/L"]*Ispecsqn,
+                                     ekv_df["W/L"]*Ispecsqp)
+ekv_df["IC"]=ekv_df["ID"]/ekv_df["Ispec"]
+ekv_df["VP-VS"]=UT*vps_ic(ekv_df["IC"])
+ekv_df["n"]=np.where(ekv_df["Type"]=="n",
+                                     n0n,
+                                     n0p)
+ekv_df["VG-VT0"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["VP-VS"]/n0n,
+                                     ekv_df["VP-VS"]/n0p)
+ekv_df["VDSsat"]=UT*vdssat_ic(ekv_df["IC"])
+ekv_df["Gspec"]=ekv_df["Ispec"]/UT
+ekv_df["Gms"]=ekv_df["Gspec"]*gms_ic(ekv_df["IC"])
+ekv_df["Gm"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["Gms"]/n0n,
+                                     ekv_df["Gms"]/n0p)
+ekv_df["Gds"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["ID"]/(lambdan*ekv_df["L"]),
+                                     ekv_df["ID"]/(lambdap*ekv_df["L"]))
+ekv_df["gamman"]=np.where(ekv_df["Type"]=="n",
+                                     gamman_ic(ekv_df["IC"],n0n),
+                                     gamman_ic(ekv_df["IC"],n0p))
+ekv_df["COX"]=Cox*ekv_df["Weff"]*ekv_df["Leff"]
+ekv_df["CGSi"]=ekv_df["COX"]*cgsi_ic(ekv_df["IC"])
+ekv_df["CGDi"]=0
+ekv_df["CGBi"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["COX"]*cgbi_ic(ekv_df["IC"],n0n),
+                                     ekv_df["COX"]*cgbi_ic(ekv_df["IC"],n0p))
+ekv_df["CBSi"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["COX"]*cbsi_ic(ekv_df["IC"],n0n),
+                                     ekv_df["COX"]*cbsi_ic(ekv_df["IC"],n0p))
+ekv_df["CBDi"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["CGDi"]*(n0n-1),
+                                     ekv_df["CGDi"]*(n0p-1))
+ekv_df["CGSe"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W"]*CGSOn,
+                                     ekv_df["W"]*CGSOp)
+ekv_df["CGDe"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W"]*CGDOn,
+                                     ekv_df["W"]*CGDOp)
+ekv_df["CGBe"]=np.where(ekv_df["Type"]=="n",
+                                    ekv_df["W"]*CGBOn,
+                                    ekv_df["W"]*CGBOp)
+ekv_df["CBSe"]=np.where(ekv_df["Type"]=="n",
+                                    ekv_df["Weff"]*Hdif*CJn+2*(ekv_df["Weff"]+Hdif)*CJSWn,
+                                    ekv_df["Weff"]*Hdif*CJp+2*(ekv_df["Weff"]+Hdif)*CJSWp)
+ekv_df["CBDe"]=np.where(ekv_df["Type"]=="n",
+                                    ekv_df["Weff"]*Hdif*CJn+2*(ekv_df["Weff"]+Hdif)*CJSWn,
+                                    ekv_df["Weff"]*Hdif*CJp+2*(ekv_df["Weff"]+Hdif)*CJSWp)
+ekv_df["CGS"]=ekv_df["CGSi"]+ekv_df["CGSe"]
+ekv_df["CGD"]=ekv_df["CGDi"]+ekv_df["CGDe"]
+ekv_df["CGB"]=ekv_df["CGBi"]+ekv_df["CGBe"]
+ekv_df["CBS"]=ekv_df["CBSi"]+ekv_df["CBSe"]
+ekv_df["CBD"]=ekv_df["CBDi"]+ekv_df["CBDe"]
+pd.set_option('display.float_format', '{:.2E}'.format)
+ekv_df
+
+# Generate the table from dataframe
+feature_list=["W","L","ID","Ispec","IC","VG-VT0","VDSsat"]
+Nmos=len(transistor_list)
+Nfeature=len(feature_list)
+table=[]
+for mos in transistor_list:
+  row=[mos]
+  for feature in feature_list:
+    row.append(ekv_df.at[mos,feature])
+  table.append(row)
+
+# Scale data for proper units
+for i in range(Nmos):
+#  for j in [3,4]:
+#    table[i][j]=table[i][j]/1e-9
+  for j in [1,2,3,4]:
+    table[i][j]=table[i][j]/1e-6
+  for j in [6,7]:
+    table[i][j]=table[i][j]/1e-3
+
+Markdown(tabulate(
+  table,
+  headers=["Transistor","$W\\;[\\mu m]$","$L\\;[\\mu m]$","$I_D\\;[\\mu A]$","$I_{{spec}}\\;[\\mu A]$","$IC$","$V_G-V_{{T0}}\\;[mV]$","$V_{{DSsat}}\\;[mV]$"],
+  numalign="center",
+  stralign="center",
+  colalign=("center","center","center","center","center","center","center","center"),
+  floatfmt=(".3f",".2f",".2f",".3f",".3f",".1f",".0f",".0f")
+))
+```
+
+```{python}
+#| label: tbl-svf_transistor_info2
+#| tbl-cap: Transistor small-signal and thermal noise parameters.
+
+# Generate the table from dataframe
+feature_list=["Gspec","Gms","Gm","Gds","gamman"]
+Nmos=len(transistor_list)
+Nfeature=len(feature_list)
+table=[]
+for mos in transistor_list:
+  row=[mos]
+  for feature in feature_list:
+    row.append(ekv_df.at[mos,feature])
+  table.append(row)
+
+# Scale data for proper units
+for i in range(Nmos):
+  for j in [1,2,3]:
+    table[i][j]=table[i][j]/1e-6
+  for j in [4]:
+    table[i][j]=table[i][j]/1e-9
+
+Markdown(tabulate(
+  table,
+  headers=["Transistor","$G_{{spec}}\\;[\\mu A/V]$","$G_{{ms}}\\;[\\mu A/V]$","$G_m\\;[\\mu A/V]$","$G_{{ds}}\\;[nA/V]$","$\\gamma_n$"],
+  numalign="center",
+  stralign="center",
+  colalign=("center","center","center","center","center","center"),
+  floatfmt=(".3f",".3f",".3f",".3f",".3f",".3f")
+))
+```
+
+## Simulation
+We now will simulate the circuit shown in @fig-svf_sim. We have chosen the input bias voltage in the middle of the supply voltage $V_{inq} = V_{DD}/2 =$ `{python} f'{Vinq:.2f}'` $V$. The operating voltages are given in @tbl-svf_voltages1.
+
+```{python}
+#| label: tbl-svf_voltages1
+#| tbl-cap: SVF node voltages.
+
+circuitName="svf"
+simtype = ".op"
+fileName = circuitName + simtype
+simulationPath = "./Simulations/SVF/ngspice/"
+qucsPath = "./Simulations/SVF/qucs-s/"
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationVoltages = simulationPath + fileName + ".ic"
+simulationData = simulationPath + fileName + ".dat"
+
+if newSim:
+  paramstr = '\n'.join((
+    f'.param VDD={VDD:.1f} Vinq={Vinq:.3f} Ib={Ib/1e-6:.3f}u',
+    f'.param CL={CL/1e-12:.3f}p',
+    f'.param W1={W1/1e-6:.2f}u L1={L1/1e-6:.2f}u',
+    f'.param W2={W2/1e-6:.2f}u L2={L2/1e-6:.2f}u'
+  ))
+  # Write the transistors sizes and bias to the ngspice directory
+  with open(simulationPath+'size_bias.par', 'w') as f:
+    f.write(paramstr)
+  # Write the transistors sizes and bias to the qucs-s directory
+  with open(qucsPath+'size_bias.par', 'w') as f:
+    f.write(paramstr)
+  #print('Starting ngspice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+nodeList=["vdd","in","out","1"]
+v_df=pd.DataFrame(index=nodeList)
+Nnodes=len(nodeList)
+for k in range(0,Nnodes):
+  nodeName=nodeList[k]
+  regexp = re.compile(r'v\(' + nodeName + r'\)' + refloat)
+  with open(simulationVoltages) as f:
+    for line in f:
+      match = re.search(regexp, line)
+      if match:
+        v_df.at[nodeName, 'Voltage']=float(match.group(1))
+
+Voutq=v_df.loc['out','Voltage']
+
+Markdown( 
+  tabulate(v_df,
+  showindex=True,
+  headers=["Node","Voltage"],
+  numalign="center",
+  stralign="center",
+  colalign=("center","center")
+))
+```
+
+```{python}
+VGS1=ekv_df.at["M1","VG-VT0"]+VT0n
+```
+
+We can now check the input-output voltage compliance by running a DC sweep. The minimum input voltage can be estmiated to $V_{in,min} = V_{GS1} \cong$ `{python} f'{VGS1:.3f}'` $V$. The simulated large-signal input-output characteristic is plotted in @fig-svf_dc_sweep. It is quite close to the theoretical estimation.
+
+```{python}
+#| label: fig-svf_dc_sweep
+#| fig-cap: Simulated large-signal input-output characteristic.
+
+circuitName = "svf"
+simtype = ".dc"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+Vinmin=0
+Vinmax=1.8
+Npts=101
+dVin=(Vinmax-Vinmin)/(Npts-1)
+
+if newSim:
+  simpar = '\n'.join((
+    f'.csparam Vinmin={Vinmin:.3e}',
+    f'.csparam Vinmax={Vinmax:.3e}',
+    f'.csparam dVin={dVin:.3e}'
+  ))
+  simparFile = simulationPath + "svf.dc.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+
+Vinsim=df_sim['v-sweep'].to_numpy()
+Voutsim=df_sim['Vout'].to_numpy()
+
+Vinthe=Vinsim
+Voutthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  Voutthe[k]=Vinthe[k]-VGS1
+
+#plt.plot([Vidmin/1e-3,Vidmax/1e-3],[Voutmin,Voutmin],'k--', linewidth=lw)
+plt.plot(Vinsim, Voutsim, 'r-', label='Simulation')
+plt.plot(Vinthe, Voutthe, 'b--', label='Theory')
+plt.xlim(Vinmin,Vinmax)
+plt.xticks(np.arange(0,2,0.2))
+plt.xlabel('$V_{in}$ [$V$]')
+plt.ylim(0,1.4)
+#plt.yticks(np.arange(0.6,1.5,0.1))
+plt.ylabel('$V_{out}$ [V]')
+plt.legend(loc='upper left')
+#textstr = '\n'.join((
+#  f'$V_{{DD}} =$ {VDD:.1f} V',
+#  f'$V_{{ic}} =$ {Vic:.1f} V',
+#  f'$V_{{out0}} =$ {Voutq0:.3f} V',
+#  f'$V_{{outq}} =$ {Voutq:.3f} V',
+#  f'$V_{{os}} =$ {Vos/1e-6:.3f} $\\mu\\,V$',
+#  f'$V_{{outmax}} \\cong$ {Voutmax:.3f} V',
+#  f'$V_{{outmin}} \\cong$ {Voutmin:.3f} V',
+#  f'$V_{{swing}} \\cong$ {Vswing:.2f} V'))
+#plt.text(1.05, 0.5, textstr, ha='left', va='center', size=textFontSize, transform=plt.gca().transAxes,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+if savePlots: saveFigures(savePlotPath, otaName + '_transfer_characteristic_sim')
+plt.show()
+```
+
+The small-signal simulated transfer function is compared to the theoretical estimation in @fig-svf_tf. We see a perfect match between simulation results and theoretical estimation. 
+
+```{python}
+#| label: fig-svf_tf
+#| fig-cap: Simulated gain response compared to theoretical estimation.
+
+def Avsvf(s,Adc,wz,wp):
+  num=Adc*(s/wz+1)
+  den=s/wp+1
+  return num/den
+
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+fmin=1e4
+fmax=1e9
+Ndec=201
+
+if newSim:
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "svf.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+AvmagdBsim=df_sim['AmagdB'].to_numpy()
+Avphidegsim=df_sim['Aphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+#fmax=fsim[Npts-1]
+fmax=1e8
+
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      AdcdBsim=float(match.group(1))
+
+regexp = re.compile(r'fc' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      fpsim=float(match.group(1))
+
+AdcdBsim=AvmagdBsim[0]
+Adcsim=pow(10,AdcdBsim/20)
+
+Gm1=ekv_df.at["M1","Gm"]
+Gds1=ekv_df.at["M1","Gds"]
+Gds2=ekv_df.at["M2a","Gds"]
+CGS1=ekv_df.at["M1","CGS"]
+Go=Gds1+Gds2
+Adcthe=Gm1/(Gm1+Go)
+AdcdBthe=20*log(abs(Adcthe))
+wzthe=Gm1/CGS1
+fzthe=wzthe/(2*pi)
+wpthe=Gm1/CL
+fpthe=wpthe/(2*pi)
+
+fthe=fsim
+Avthe=np.zeros(Npts,dtype=complex)
+AvmagdBthe=np.zeros(Npts)
+Avphidegthe=np.zeros(Npts)
+AvmagdBthe2=np.zeros(Npts)
+Avphidegthe2=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  Avthe[k]=Avsvf(jw,Adcthe,wzthe,wpthe)
+  AvmagdBthe[k]=20*log(abs(Avthe[k]))
+  Avphidegthe[k]=np.angle(Avthe[k],deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+axs[0].semilogx(fsim,AvmagdBsim,'ro', markersize=3, markevery=10, label='Simulation')
+axs[0].semilogx(fthe,AvmagdBthe,'b-',label='Theory')
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(-40,10))
+axs[0].set(ylabel='$|A_v|$ [dB]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$A_{{dc}} =$ {AdcdBthe:.1f} dB (theory)',
+  f'$A_{{dc}} =$ {AdcdBsim:.1f} dB (sim)',
+  f'$f_z =$ {fzthe/1e6:.1f} MHz (theory)',
+  f'$f_p =$ {fpthe/1e6:.1f} MHz (theory)',
+  f'$f_p =$ {fpsim/1e6:.1f} MHz (sim)'))
+axs[0].text(0.03, 0.07, textstr1, ha='left', va='bottom', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim,Avphidegsim,'ro', markersize=3, markevery=10, label='Simulation')
+axs[1].semilogx(fthe,Avphidegthe,'b-',label='Theory')
+#axs[1].semilogx(fthe,Avphidegthe2,'b--',label='Theory (with adjusted $C_F$)')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-90,0))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_v\\}$ [degree]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-90,-45,0])
+axs[1].legend(loc='upper right')
+textstr2 = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.2f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.03, 0.07, textstr2, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+Finally, the simulated output impedance normalized to $1/G_{m1}$ is compared to the theoretical estimation in @fig-svf_zout_sim. Again, we see a perfect match between the simulation and the theoretical estimation.
+
+```{python}
+#| label: fig-svf_zout_sim
+#| fig-cap: Simulated output impedance normalized to $1/G_{m1}$ and compared to the theoretical expression.
+
+def Zout1(s,Rout,wp):
+  num=Rout
+  den=(s/wp+1)
+  return num/den
+
+circuitName="svfzout"
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+fmin=1e4
+fmax=1e9
+Ndec=201
+
+if newSim:
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "svfzout.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+Youtmagsim=df_sim['Youtmag'].to_numpy()
+Youtphidegsim=df_sim['Youtphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+#fmax=fsim[Npts-1]
+fmax=1e8
+
+Zoutmagsim=1/Youtmagsim
+Zoutphidegsim=-Youtphidegsim
+
+fthe=fsim
+Zoutthe=np.zeros(Npts,dtype=complex)
+Zoutmagthe=np.zeros(Npts)
+Zoutphidegthe=np.zeros(Npts)
+
+Routthe=1/(Gm1+Go)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  Zoutthe[k]=Zout1(jw,Routthe,wpthe)
+  Zoutmagthe[k]=abs(Zoutthe[k])
+  Zoutphidegthe[k]=np.angle(Zoutthe[k],deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+#axs[0].semilogx([fmin,fmax],[-3,-3],'k--', linewidth=lw)
+axs[0].loglog(fsim,Gm1*Zoutmagsim,'ro', markersize=3, markevery=12, label='simulation')
+axs[0].loglog(fthe,Gm1*Zoutmagthe,'b-',label='theory')
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(1e-2,1e1))
+axs[0].set(ylabel='$|G_{m1}\,Z_{out}|$ [-]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$R_{{out}} =$ {Routthe/1e3:.2f} $k \Omega$',
+  f'$G_{{m1}}\\,R_{{out}} =$ {Gm1*Routthe:.3f}',
+  f'$f_p =$ {fpthe/1e6:.1f} MHz',
+  f'$f_p =$ {fpsim/1e6:.1f} MHz (sim)'))
+axs[0].text(0.04, 0.07, textstr1, ha='left', va='bottom', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim,Zoutphidegsim,'ro', markersize=3, markevery=12, label='simulation')
+axs[1].semilogx(fthe,Zoutphidegthe,'b-',label='theory')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-90,0))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{G_{m1}\,Z_{out}\\}$ [deg]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-90,-45,0])
+axs[1].legend(loc='upper right')
+textstr2 = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.2f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.03, 0.07, textstr2, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+Voltage followers are used to provide a low output resistance. In the specifications @tbl-svf_specs, we have not given any value for this output resistance. The transconductance $G_{m1}$ was actually set by the required bandwidth and corresponds to an output resistance $R_{out} =$ `{python} f'{Routthe/1e3:.3f}'` $k \Omega$, which might not be low enough for some applications.
+
+```{python}
+Rout=50
+Gm1=1/Rout
+IC1=100
+Ib1=Gm1*n0n*UT/gmsid_ic(IC1)
+```
+
+If we need a much lower output resistance of for example $R_{out} =$ `{python} f'{Rout:.0f}'` $\Omega$, even for an inversion coefficient as large as $IC_1 =$ `{python} f'{IC1:.0f}'`, the required bias current is then $I_b =$ `{python} f'{Ib1/1e-3:.3f}'` $mA$, which is considerable. We can lower the output resistance compared to the SVF by using one of the improved voltage follower decribed next.
+
+# The super source follower (SSF) {#sec-ssf}
+
+![Schematic of the SSF @bib:gray:book:2009.](Figures/ssf_schematic){width=30% #fig-ssf_schematic}
+
+The output resistance of the SVF is limited to $1/G_m$ and might need a high current consumption to have a sufficiently low resistance. This can be circumvented by using the super soource follower (SSF) shown in @fig-ssf_schematic @bib:gray:book:2009. The SSF introduces a feedback loop with an additional common-source transistor M~2~. The feedback loop operates as follows. Let's assume that the ouput voltage increases. For a constant input voltage, the drain current of M~1~ decreases and its drain voltage and hence gate voltage of M~2~ increases. The drain current of M~2~ also decreases and so does its drain voltage bringing the output voltage back to its quiescent value. This means that the feedback loop is trying to keep the output voltage constant, independently of the output current, resulting in a high output resistance. This feature will be analyzed in more details in the next Section.
+
+## Output resistance
+
+![Small-signal schematic of the SSF for calculation of the output resistance.](Figures/ssf_rout){width=35% #fig-ssf_rout}
+
+The output resistance can be calculated using the small-signal circuit shown in @fig-ssf_rout, resulting in
+\begin{equation}
+  R_{out} = \frac{G_{ds1}}{G_{m1}\,G_{m2}+G_{m2}\,G_{ds1}+G_{ds1}\,G_{ds2}} \cong \frac{G_{ds1}}{G_{m1}\,G_{m2}} \quad \textsf{for $G_{ds1} \ll G_{m1}$ and $G_{ds2}  \ll G_{m2}$}.
+\end{equation}
+The output resistance of the SSF is equal to that of the SVF divided by $G_{m2}/G_{ds1}$.
+
+## Transfer function {#sec-ssf-tf}
+
+![Small-signal schematic of the SSF for calculation of the output resistance.](Figures/ssf_gain_nocp){width=35% #fig-ssf_gain_nocp}
+
+The voltage gain ignoring all the parasitic capacitance except the load capacitance can be calculated using the small-signal schematic shown in @fig-ssf_gain_nocp. This results in
+\begin{equation}
+  A_v(s) = \frac{A_{dc}}{s/\omega_p + 1},
+\end{equation}
+with
+\begin{align}
+  A_{dc} &= \frac{G_{m1}\,G_{m2}}{G_{m1}\,G_{m2}+G_{m2}\,G_{ds1}+G_{ds1}\,G_{ds2}} \cong 1,\\
+  \omega_p &= \frac{G_{m1}\,G_{m2}+G_{m2}\,G_{ds1}+G_{ds1}\,G_{ds2}}{G_{ds1}\,C_L} \cong \frac{G_{m1}\,G_{m2}}{G_{ds1}\,C_L}.
+\end{align}
+We see that the bandwidth of the SSF is extended by $G_{m2}/G_{ds1}$ compared to that of the SVF.
+
+To check the above observations, we now will design a SSF for the same specifications than used for the SVF which are repeated in @tbl-fvf_specs.
+
+```{python}
+#| label: tbl-ssf_specs
+#| tbl-cap: FVF specifications.
+
+BWspec=1e6
+wc=2*pi*BWspec
+CL=10e-12
+
+table = [["Minimum bandwidth","$BW$",f'{BWspec/1e6:.0f}',"$MHz$"],
+         ["Load capacitance","$C_L$",f'{CL/1e-12:.0f}',"$pF$"]
+         ]
+
+Markdown(tabulate(
+  table,
+  headers=["Specification","Symbol","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("left","center","center","center")
+))
+```
+
+```{python}
+# Sizing of M1
+IC1=1
+ID1=Ib
+Gm1=ID1/(n0n*UT)*gmsid_ic(IC1)
+Ispec1=ID1/IC1
+WoverL1=Ispec1/Ispecsqn
+L1=1e-6
+Leff1=L1+DLn
+Weff1=WoverL1*Leff1
+W1=Weff1-DWn
+AD1=2*Hdif*Weff1
+PD1=2*(2*Hdif+Weff1)
+
+# Sizing of M2
+IC2=IC1
+ID2=ID1
+Gm2=ID2/(n0p*UT)*gmsid_ic(IC2)
+Ispec2=ID2/IC2
+WoverL2=Ispec2/Ispecsqp
+L2=0.5e-6
+Leff2=L2+DLp
+Weff2=WoverL2*Leff2
+W2=Weff2-DWp
+AD2=2*Hdif*Weff2
+PD2=2*(2*Hdif+Weff2)
+
+Ib1=ID1
+Ib2=ID1+ID2
+Vinq=0.9
+```
+
+The circuit requires a minimum supply voltage equal to two saturation voltages and one $V_{GS}$ voltage. In order to save some voltage headroom, we choose to bias M~1~ and M~2~ in moderate inversion with $IC_1 = IC_2 =$ `{python} f'{IC1:.0f}'`.
+
+We will use the same current $I_b$ of the SVF to bias M~1~ $I_{D1} = I_b =$ `{python} f'{ID1/1e-6:.3f}'` $\mu A$. This results in the same transconductance as used for M~1~ in the SVF, namely $G_{m1} =$ `{python} f'{Gm1/1e-6:.3f}'` $\mu A/V$. The specific current and $W/L$ ratio are then given by $I_{spec1} =$ `{python} f'{Ispec1/1e-6:.3f}'` $\mu A$ and $(W/L)_1 =$ `{python} f'{WoverL1:.3f}'`. To have enough self-gain we choose a long transistor with $L_1 =$ `{python} f'{L1/1e-6:.2f}'` $\mu m$, resulting in $W_1 =$ `{python} f'{W1/1e-6:.2f}'` $\mu m$. M~1~ is therefore identical to M~1~ of the SVF.
+
+We decide to use the same bias current for M~2~ $I_{D2} = I_{D1} =$ `{python} f'{ID2/1e-6:.3f}'` $\mu A$. The transconductance is then given by $G_{m2} = I_{D2}/(n_{0p}\,U_T) =$  `{python} f'{Gm2/1e-6:.3f}'` $\mu A/V$. The specific current and $W/L$ ratio are then given by $I_{spec2} =$ `{python} f'{Ispec2/1e-6:.3f}'` $\mu A$ and $(W/L)_2 =$ `{python} f'{WoverL2:.3f}'`. Since the $W/L$ of M~2~ is much larger than that of M~1~, we choose a slightly shorter length $L_2 =$ `{python} f'{L2/1e-6:.2f}'` $\mu m$, we get $W_2 =$ `{python} f'{W2/1e-6:.2f}'` $\mu m$.
+
+The transistor sizing result is summarized in @tbl-fvf_nocp_transistor_info1, while the small-signal parameters are given in @tbl-fvf_nocp_transistor_info2.
+
+```{python}
+#| label: tbl-ssf_nocp_transistor_info1
+#| tbl-cap: Transistor size and bias information.
+
+transistor_info={
+    "Type": ["n","p"],
+    "Function": ["VF","CS"],
+    "W": [W1,W2],
+    "L": [L1,L2],
+    "ID": [ID1,ID2]
+}
+transistor_list=["M1","M2"]
+ekv_df=pd.DataFrame(transistor_info, index=transistor_list)
+
+ekv_df["Weff"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W"]+DWn,
+                                     ekv_df["W"]+DWp)
+ekv_df["Leff"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["L"]+DLn,
+                                     ekv_df["L"]+DLp)
+ekv_df["W/L"]=ekv_df["Weff"]/ekv_df["Leff"]
+ekv_df["Ispec"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W/L"]*Ispecsqn,
+                                     ekv_df["W/L"]*Ispecsqp)
+ekv_df["IC"]=ekv_df["ID"]/ekv_df["Ispec"]
+ekv_df["VP-VS"]=UT*vps_ic(ekv_df["IC"])
+ekv_df["n"]=np.where(ekv_df["Type"]=="n",
+                                     n0n,
+                                     n0p)
+ekv_df["VG-VT0"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["VP-VS"]/n0n,
+                                     ekv_df["VP-VS"]/n0p)
+ekv_df["VDSsat"]=UT*vdssat_ic(ekv_df["IC"])
+ekv_df["Gspec"]=ekv_df["Ispec"]/UT
+ekv_df["Gms"]=ekv_df["Gspec"]*gms_ic(ekv_df["IC"])
+ekv_df["Gm"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["Gms"]/n0n,
+                                     ekv_df["Gms"]/n0p)
+ekv_df["Gds"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["ID"]/(lambdan*ekv_df["L"]),
+                                     ekv_df["ID"]/(lambdap*ekv_df["L"]))
+ekv_df["gamman"]=np.where(ekv_df["Type"]=="n",
+                                     gamman_ic(ekv_df["IC"],n0n),
+                                     gamman_ic(ekv_df["IC"],n0p))
+ekv_df["COX"]=Cox*ekv_df["Weff"]*ekv_df["Leff"]
+ekv_df["CGSi"]=ekv_df["COX"]*cgsi_ic(ekv_df["IC"])
+ekv_df["CGDi"]=0
+ekv_df["CGBi"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["COX"]*cgbi_ic(ekv_df["IC"],n0n),
+                                     ekv_df["COX"]*cgbi_ic(ekv_df["IC"],n0p))
+ekv_df["CBSi"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["COX"]*cbsi_ic(ekv_df["IC"],n0n),
+                                     ekv_df["COX"]*cbsi_ic(ekv_df["IC"],n0p))
+ekv_df["CBDi"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["CGDi"]*(n0n-1),
+                                     ekv_df["CGDi"]*(n0p-1))
+ekv_df["CGSe"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W"]*CGSOn,
+                                     ekv_df["W"]*CGSOp)
+ekv_df["CGDe"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W"]*CGDOn,
+                                     ekv_df["W"]*CGDOp)
+ekv_df["CGBe"]=np.where(ekv_df["Type"]=="n",
+                                    ekv_df["W"]*CGBOn,
+                                    ekv_df["W"]*CGBOp)
+ekv_df["CBSe"]=np.where(ekv_df["Type"]=="n",
+                                    ekv_df["Weff"]*Hdif*CJn+2*(ekv_df["Weff"]+Hdif)*CJSWn,
+                                    ekv_df["Weff"]*Hdif*CJp+2*(ekv_df["Weff"]+Hdif)*CJSWp)
+ekv_df["CBDe"]=np.where(ekv_df["Type"]=="n",
+                                    ekv_df["Weff"]*Hdif*CJn+2*(ekv_df["Weff"]+Hdif)*CJSWn,
+                                    ekv_df["Weff"]*Hdif*CJp+2*(ekv_df["W"]+Hdif)*CJSWp)
+ekv_df["CGS"]=ekv_df["CGSi"]+ekv_df["CGSe"]
+ekv_df["CGD"]=ekv_df["CGDi"]+ekv_df["CGDe"]
+ekv_df["CGB"]=ekv_df["CGBi"]+ekv_df["CGBe"]
+ekv_df["CBS"]=ekv_df["CBSi"]+ekv_df["CBSe"]
+ekv_df["CBD"]=ekv_df["CBDi"]+ekv_df["CBDe"]
+#pd.set_option('display.float_format', '{:.2E}'.format)
+#ekv_df
+
+# Generate the table from dataframe
+feature_list=["W","L","ID","Ispec","IC","VG-VT0","VDSsat"]
+Nmos=len(transistor_list)
+Nfeature=len(feature_list)
+table=[]
+for mos in transistor_list:
+  row=[mos]
+  for feature in feature_list:
+    row.append(ekv_df.at[mos,feature])
+  table.append(row)
+
+# Scale data for proper units
+for i in range(Nmos):
+#  for j in [3,4]:
+#    table[i][j]=table[i][j]/1e-9
+  for j in [1,2,3,4]:
+    table[i][j]=table[i][j]/1e-6
+  for j in [6,7]:
+    table[i][j]=table[i][j]/1e-3
+
+Markdown(tabulate(
+  table,
+  headers=["Transistor","$W\\;[\\mu m]$","$L\\;[\\mu m]$","$I_D\\;[\\mu A]$","$I_{{spec}}\\;[\\mu A]$","$IC$","$V_G-V_{{T0}}\\;[mV]$","$V_{{DSsat}}\\;[mV]$"],
+  numalign="center",
+  stralign="center",
+  colalign=("center","center","center","center","center","center","center","center"),
+  floatfmt=(".3f",".2f",".2f",".3f",".3f",".1f",".0f",".0f")
+))
+```
+
+```{python}
+#| label: tbl-ssf_nocp_transistor_info2
+#| tbl-cap: Transistor small-signal and thermal noise parameters.
+
+# Generate the table from dataframe
+feature_list=["Gspec","Gms","Gm","Gds","gamman"]
+Nmos=len(transistor_list)
+Nfeature=len(feature_list)
+table=[]
+for mos in transistor_list:
+  row=[mos]
+  for feature in feature_list:
+    row.append(ekv_df.at[mos,feature])
+  table.append(row)
+
+# Scale data for proper units
+for i in range(Nmos):
+  for j in [1,2,3]:
+    table[i][j]=table[i][j]/1e-6
+  for j in [4]:
+    table[i][j]=table[i][j]/1e-9
+
+Markdown(tabulate(
+  table,
+  headers=["Transistor","$G_{{spec}}\\;[\\mu A/V]$","$G_{{ms}}\\;[\\mu A/V]$","$G_m\\;[\\mu A/V]$","$G_{{ds}}\\;[nA/V]$","$\\gamma_n$"],
+  numalign="center",
+  stralign="center",
+  colalign=("center","center","center","center","center","center"),
+  floatfmt=(".3f",".3f",".3f",".3f",".3f",".3f")
+))
+```
+
+![Schematic of the SSF used for simulation.](Figures/ssf_sim){width=35% #fig-ssf_sim}
+
+We now will simulate the circuit shown in @fig-ssf_sim. We have chosen the input bias voltage $V_{inq} =$ `{python} f'{Vinq:.2f}'` $V$. The operating voltages are given in @tbl-fvf_nocp_voltages1.
+
+```{python}
+#| label: tbl-ssf_nocp_voltages1
+#| tbl-cap: FVF node voltages.
+
+circuitName="ssf"
+simtype = ".op"
+fileName = circuitName + simtype
+simulationPath = "./Simulations/SSF/ngspice/"
+qucsPath = "./Simulations/SSF/qucs-s/"
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationVoltages = simulationPath + fileName + ".ic"
+simulationData = simulationPath + fileName + ".dat"
+
+if newSim:
+  paramstr = '\n'.join((
+    f'.param VDD={VDD:.1f} Vinq={Vinq:.3f} Ib1={Ib1/1e-6:.3f}u Ib2={Ib2/1e-6:.3f}u',
+    f'.param CL={CL/1e-12:.3f}p',
+    f'.param W1={W1/1e-6:.2f}u L1={L1/1e-6:.2f}u AD={AD1:.2e} PD={PD1:.2e}',
+    f'.param W2={W2/1e-6:.2f}u L2={L2/1e-6:.2f}u AD={AD2:.2e} PD={PD2:.2e}'
+  ))
+  # Write the transistors sizes and bias to the ngspice directory
+  with open(simulationPath+'size_bias.par', 'w') as f:
+    f.write(paramstr)
+  # Write the transistors sizes and bias to the qucs-s directory
+  with open(qucsPath+'size_bias.par', 'w') as f:
+    f.write(paramstr)
+  #print('Starting ngspice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+nodeList=["vdd","in","out","1"]
+v_df=pd.DataFrame(index=nodeList)
+Nnodes=len(nodeList)
+for k in range(0,Nnodes):
+  nodeName=nodeList[k]
+  regexp = re.compile(r'v\(' + nodeName + r'\)' + refloat)
+  with open(simulationVoltages) as f:
+    for line in f:
+      match = re.search(regexp, line)
+      if match:
+        v_df.at[nodeName, 'Voltage']=float(match.group(1))
+
+V1=v_df.loc['1','Voltage']
+Voutq=v_df.loc['out','Voltage']
+
+Markdown( 
+  tabulate(v_df,
+  showindex=True,
+  headers=["Node","Voltage"],
+  numalign="center",
+  stralign="center",
+  colalign=("center","center")
+))
+```
+
+The operating point looks fine. We can now proceed with the simulation of the voltage gain with an AC simulation. The result is shown in @fig-fvf_svf_tf. We can check the large- and small-signal parameters which are extracted from the operating point file and presented in @tbl-ssf_op1 and @tbl-ssf_op2.
+
+```{python}
+#| label: tbl-ssf_op1
+#| tbl-cap: Large-signal operating point information extracted from ngspice .op file for each transistor.
+
+ngspiceDataFile = simulationPath + fileName + ".dat"
+mos_df=pd.read_table(ngspiceDataFile, sep=r'\s+', skiprows=[2], dtype=np.float64, engine='python')
+mos_df=mos_df.rename(columns={'@n1[id]': 'Transistor', '@N1[Id]': 'ID', '@N1[Ispec]': 'Ispec', '@N1[IC]': 'IC', '@N1[n0]': 'n', '@N1[Vdsat]': 'VDsat',
+                            '@N1[gm]': 'Gm', '@N1[gms]': 'Gms', '@N1[gds]': 'Gds', '@N1[gmbs]': 'Gmb',
+                            '@N1[Rn]': 'Rn', '@N1[Vnth]': 'Vnth', '@N1[gamman]': 'gamman', '@N1[Vnfl]': 'Vnfl at 1Hz'})
+mos_df['Transistor'] = mos_df['Transistor'].astype(str)
+mos_df.at[0, 'Transistor'] = 'M1'
+mos_df.at[1, 'Transistor'] = 'M2'
+mos_df.set_index('Transistor', inplace=True)
+mos_df.rename_axis(index=None, inplace=True)
+pd.set_option('display.float_format', '{:.2E}'.format)
+#mos_df
+
+feature_list=["ID","Ispec","IC","n","VDsat"]
+
+Nfeature=len(feature_list)
+table=[]
+for mos in transistor_list:
+  row=[mos]
+  for feature in feature_list:
+    row.append(mos_df.at[mos,feature])
+  table.append(row)
+
+for i in range(Nmos):
+  for j in [1,2]:
+    table[i][j]=table[i][j]/1e-6
+  for j in [5]:
+    table[i][j]=table[i][j]/1e-3
+
+Markdown(tabulate(
+  table,
+  headers=["Transistor","$I_D\\;[\\mu A]$","$I_{spec}\\;[\\mu A]$","$IC$ [-]","$n$ [-]","$V_{DSsat}\\;[mV]$"],
+  numalign="center",
+  stralign="center",
+  colalign=("center","center","center","center","center","center"),
+  floatfmt=(".3f",".3f",".3f",".3f",".2f",".0f")
+))
+```
+
+```{python}
+#| label: tbl-ssf_op2
+#| tbl-cap: Small-signal operating point information extracted from ngspice .op file for each transistor.
+
+feature_list=["Gm","Gms","Gds"]
+
+Nfeature=len(feature_list)
+table=[]
+for mos in transistor_list:
+  row=[mos]
+  for feature in feature_list:
+    row.append(mos_df.at[mos,feature])
+  table.append(row)
+
+for i in range(Nmos):
+  for j in [1,2]:
+    table[i][j]=table[i][j]/1e-6
+  for j in [3]:
+    table[i][j]=table[i][j]/1e-9
+
+Markdown(tabulate(
+  table,
+  headers=["Transistor","$G_m\\;[\\mu A/V]$","$G_{ms}\\;[\\mu A/V]$","$G_{ds}\\;[nA/V]$"],
+  numalign="center",
+  stralign="center",
+  colalign=("center","center","center","center"),
+  floatfmt=(".3f",".3f",".3f",".3f")
+))
+```
+
+
+We see that the simulated transconductances are slightly smaller than the one derived in the design phase.
+
+```{python}
+#| label: fig-ssf_svf_tf
+#| fig-cap: Simulated gain response compared to theoretical estimation.
+
+def Av1(s,Adc,wc):
+  num=Adc
+  den=(1+s/wc)
+  return num/den
+
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+fmin=1e5
+fmax=1e9
+Ndec=201
+
+if newSim:
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "ssf.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+AvmagdBsim=df_sim['AmagdB'].to_numpy()
+Avphidegsim=df_sim['Aphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+fmax=fsim[Npts-1]
+
+regexp = re.compile(r'adc' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      AdcdBsim=float(match.group(1))
+
+AdcdBsim=AvmagdBsim[0]
+Adcsim=pow(10,AdcdBsim/20)
+
+fsvf=fthe
+fthe=fsim
+
+Gm1=ekv_df.at["M1","Gm"]
+Gds1=ekv_df.at["M1","Gds"]
+Gm2=ekv_df.at["M2","Gm"]
+Gds2=ekv_df.at["M2","Gds"]
+Adcthe=Gm1*Gm2/(Gm1*Gm2+Gm2*Gds1+Gds1*Gds2)
+AdcdBthe=20*log(abs(Adcthe))
+wcthe=(Gm1*Gm2+Gm2*Gds1+Gds1*Gds2)/(Gds1*CL)
+fcthe=wcthe/(2*pi)
+
+AvmagdBthe=np.zeros(Npts)
+Avphidegthe=np.zeros(Npts)
+AvmagdBthe2=np.zeros(Npts)
+Avphidegthe2=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  AvmagdBthe[k]=20*log(abs(Av1(jw,Adcthe,wcthe)))
+  Avphidegthe[k]=np.angle(Av1(jw,Adcthe,wcthe),deg=True)
+
+df_sim=pd.read_table("./Simulations/SVF/ngspice/svf.ac.dat", sep=' +', engine='python')
+fsvf=df_sim['frequency'].to_numpy()
+AvmagdBsvf=df_sim['AmagdB'].to_numpy()
+Avphidegsvf=df_sim['Aphdeg'].to_numpy()
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+axs[0].semilogx([fmin,fmax],[-3,-3],'k--', linewidth=lw)
+axs[0].semilogx(fsim,AvmagdBsim,'r-', markersize=3, markevery=10, label='SSF (sim)')
+axs[0].semilogx(fthe,AvmagdBthe,'r--',label='SSF (theory)')
+axs[0].semilogx(fsvf,AvmagdBsvf,'r-.',label='SVF')
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(-60,40))
+axs[0].set(ylabel='$|A_v|$ [dB]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='lower left')
+#textstr1 = '\n'.join((
+#  f'$A_{{dc}} =$ {AdcdBthe:.1f} dB (theory)',
+#  f'$A_{{dc}} =$ {AdcdBsim:.1f} dB (sim)',
+#  f'$f_c =$ {fcthe/1e6:.1f} MHz (theory)'))
+#axs[0].text(0.05, 0.5, textstr1, ha='left', va='center', transform=axs[0].transAxes, size=textFontSize,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim,Avphidegsim,'b-', markersize=3, markevery=10, label='SSF (sim)')
+axs[1].semilogx(fthe,Avphidegthe,'b--',label='SSF (theory)')
+axs[1].semilogx(fsvf,Avphidegsvf,'b-.',label='SVF')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-180,0))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_v\\}$ [degree]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-180,-135,-90,-45,0])
+axs[1].legend(loc='lower left')
+textstr2 = '\n'.join((
+  f'$I_{{D1}} =$ {ID1/1e-6:.3f} $\\mu A$',
+  f'$I_{{D2}} =$ {ID2/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.05, 0.5, textstr2, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+From @fig-ssf_svf_tf, we see that the bandwidth has been increased by almost a factor 30 compared to the SVF for the same load capacitance! However, we see that the transfer function shows some big peaking at about 20 MHz and a steeper roll-off of -40 dB/dec indicating that the transfer function is of 2^nd^-order with a Q-factor larger than 1. This can be dangerous in terms of stability. We need to have a closer look at this.
+
+The 2^nd^-order transfer function is coming from the additional parasitic capacitances at the drain node of M~1~ which we have intentionnally ignored. Let's now derive the expression of the voltage gain accounting for these parasitic capacitances. The small-signal schematic including the parasitic capacitances $C_{p1}$ and $C_{p2}$ is shown in @fig-ssf_gain. Note that the parasitic capacitance $C_{p1}$ is connected between the drain and the bulk of M~1~ which is also the source terminal since M~1~ is in a separate well.
+
+![Small-signal schematic of the SSF including the parasitic capacitances $C_{p1}$ and $C_{p2}$.](Figures/ssf_small-signal){width=60% #fig-ssf_gain}
+
+The voltage gain including the parasitic capacitances $C_{p1}$ and $C_{p2}$, but assuming that $C_L \gg C_{p1},C_{p2}$ and $G_{ds1} \ll G_{m1}$ and $G_{ds2} \ll G_{m2}$, is then given by
+\begin{equation}\label{eqn:ssf:tf1}
+  A_v(s) = A_{dc}\,\frac{\frac{s}{\omega_z} + 1}{\left(\frac{s}{\omega_0}\right)^2 + \frac{s}{\omega_0\,Q} + 1}
+\end{equation}
+with
+\begin{align}
+  A_{dc} &\cong 1,\label{eqn:ssf:adc}\\
+  \omega_z &= \frac{G_{m2}}{C_{p2}},\label{eqn:ssf:wz}\\
+  \omega_0 &\cong \sqrt{\frac{G_{m1}\,G_{m2}}{C_L\,(C_{p1}+C_{p2})}},\label{eqn:ssf:w0}\\
+  Q &\cong \frac{\sqrt{C_L\,(C_{p1}+C_{p2})\,G_{m1}\,G_{m2}}}{C_L\,G_{ds1}+C_{p2}\,G_{m1}+C_{p1}\,G_{m2}}.\label{eqn:ssf:q}
+\end{align}
+
+We now have indeed a 2^nd^-order low-pass tranfer function with an additional zero in the LHS. To evaluate the transfer function given by \eqref{eqn:ssf:tf1}, we need to estimate the parasitic capacitances $C_{p1}$ and $C_{p2}$. This can be done with the help of @fig-ssf_parasitic.
+
+![Parasitic capacitances associated to M~1~ and M~2~.](Figures/ssf_parasitic){width=50% #fig-ssf_parasitic}
+
+The parasitic capacitance $C_{p1}$ between the drain and soure/bulk of M~1~ is given by
+\begin{equation}\label{eqn:ssf:cp1}
+  C_{p1} = C_{BD1} + C_{GD2},
+\end{equation}
+where $C_{BD1}$ is the junction capacitance at the drain of M~1~ given by
+\begin{equation}
+  C_{BD1} = 2 H_{dif} \cdot W_{eff1} \cdot C_{Jn} + 2(2 H_{dif}+W_{eff1}) \cdot C_{JSWn},
+\end{equation}
+with $C_{Jn}$ the bottom junction capacitance per unit area, $C_{JSWn}$ the side-wall capacitance per unit length and $H_{dif}$ the half minimum diffusion width, which is imposed by the layout rules. Of course the junction capacitances per area and per length $C_{Jn}$ and $C_{JSWn}$ are bias dependent since they depend on the drain-to-bulk voltage, but we consider their highest value obtained for a zero drain-to-bulk voltage (worst case).
+
+$C_{GD2}$ is the gate-to-drain capacitance of M~2~. Since M~2~ is in saturation, the intrinsic capacitance can be neglected and $C_{GD2}$ is given by
+\begin{equation}
+  C_{GD2} = W_{eff2}\,C_{GDe}.
+\end{equation}
+where $C_{GDe}$ is the extrinsic capacitance per unit width which includes the overlap and fringing field capacitance and is given by
+\begin{equation}
+  C_{GDe} = C_{GDo} + C_{GDf}.
+\end{equation}
+where $C_{GDo}$ is the overlap capacitance per unit width and $C_{GDf}$ is the fringing field capacitance per unit width. Note that for the chosen 180 nm technology, the fringing capacitance per unit width $C_{GDf}$ is actually zero.
+
+The parasitic capacitance $C_{p2}$ between the drain of M~1~ and ground is given by
+\begin{equation}\label{eqn:ssf:cp2}
+  C_{p2} = C_{GD1} + C_{GS2} + C_{GB2},
+\end{equation}
+
+$C_{GD1}$ is the extrinsic capacitance given by
+\begin{equation}
+  C_{GD1} = W_{eff1}\,C_{GDe}.
+\end{equation}
+
+$C_{GS2}$ is made of the intrinsic and extrinsic capacitance according to
+\begin{equation}
+  C_{GS2} = W_{eff2}\,L_{eff2}\,C_{ox}\,c_{gsi} + W_{eff2}\,C_{GDe},
+\end{equation}
+where $c_{gsi}$ is the normalized intrinsic capacitance which depends on bias, but becomes negligible in moderate and weak inversion. We therefore will neglect the intrinsic part of $C_{GS2}$.
+
+$C_{GB2}$ is the gate-to-bulk capacitance which is usually made of an intrinsic and extrinsic capacitance
+\begin{equation}
+  C_{GB2} =  W_{eff2}\,L_{eff2}\,C_{ox}\,c_{gbi} + W_{eff2}\,C_{GBe},
+\end{equation}
+where $c_{gbi}$ is the normalized gate-to-bulk intrinsic capacitance which depends on bias and $C_{GBe}$ is the gate-to-bulk extrinsinc capacitance which is mostly the overlap capacitance. Note that in this technology the gate-to-bulk overlap capacitance is almost negligible.
+
+We can now compute all the small-signal parameters in order to compute the theoretical transfer function given by \eqref{eqn:ssf:tf1}. They are presented in @tbl-ssf_small_signal_parameters1.
+
+```{python}
+#| label: tbl-ssf_small_signal_parameters1
+#| tbl-cap: Estimation of the small-signal parameters.
+
+Gm1=ekv_df.at["M1","Gm"]
+Gds1=ekv_df.at["M1","Gds"]
+CBD1=ekv_df.at["M1","CBD"]
+CGD1=ekv_df.at["M1","CGD"]
+CGB1=ekv_df.at["M1","CGB"]
+
+Gm2=ekv_df.at["M2","Gm"]
+Gds2=ekv_df.at["M2","Gds"]
+#CGS2=ekv_df.at["M2","CGS"]
+CGS2=ekv_df.at["M2","CGSe"]
+CGB2=ekv_df.at["M2","CGB"]
+CGD2=ekv_df.at["M2","CGD"]
+
+Cp1=CBD1+CGD2
+Cp2=CGD1+CGS2+CGB2
+
+A1=Gm1/Gds1
+A2=Gm2/Gds2
+
+Adc=1
+AdcdB=20*log(Adc)
+wz=Gm2/Cp2
+fz=wz/(2*pi)
+w0=sqrt(Gm1*Gm2/(CL*(Cp1+Cp2)))
+f0=w0/(2*pi)
+Q=sqrt(CL*(Cp1+Cp2)*Gm1*Gm2)/(CL*Gds1+Cp2*Gm1+Cp1*Gm2)
+
+
+table = [["$G_{{m1}}$",f'{Gm1/1e-6:.3f}',"$\\mu A/V$"],
+         ["$G_{{m2}}$",f'{Gm2/1e-6:.3f}',"$\\mu A/V$"],
+         ["$G_{{ds1}}$",f'{Gds1/1e-9:.3f}',"$nA/V$"],
+         ["$G_{{ds2}}$",f'{Gds2/1e-9:.3f}',"$nA/V$"],
+         ["$G_{{m1}}/G_{{ds1}}$",f'{A1:.3f}',"-"],
+         ["$G_{{m1}}/G_{{ds1}}$",f'{20*log(abs(A1)):.3f}',"dB"],
+         ["$G_{{m2}}/G_{{ds2}}$",f'{A2:.3f}',"-"],
+         ["$G_{{m2}}/G_{{ds2}}$",f'{20*log(abs(A2)):.3f}',"dB"],
+         ["$C_{{BD1}}$",f'{CBD1/1e-15:.3f}',"$fF$"],
+         ["$C_{{GD2}}$",f'{CGD2/1e-15:.3f}',"$fF$"],
+         ["$C_{{p1}}$",f'{Cp1/1e-15:.3f}',"$fF$"],
+         ["$C_{{GD1}}$",f'{CGD1/1e-15:.3f}',"$fF$"],
+         ["$C_{{GS2}}$",f'{CGS2/1e-15:.3f}',"$fF$"],
+         ["$C_{{GB2}}$",f'{CGB2/1e-15:.3f}',"$fF$"],
+         ["$C_{{p2}}$",f'{Cp2/1e-15:.3f}',"$fF$"],
+         ["$A_{{dc}}$",f'{Adc:.3f}',"-"],
+         ["$A_{{dc}}$",f'{AdcdB:.3f}',"dB"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_0$",f'{f0/1e6:.3f}',"$MHz$"],
+         ["$Q$",f'{Q:.3f}',"-"],
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+We see that the resonance frequency is now $f_0 =$ `{python} f'{f0/1e6:.3f}'` $MHz$ and the quality factor is $Q =$ `{python} f'{Q:.3f}'`, which is indeed larger than one explaining the peaking. We can now compare the simulated transfer function to the theoretical one given by \eqref{eqn:ssf:tf1} calculated with the small-signal parameters given in @tbl-ssf_small_signal_parameters1. The result is shown in @fig-fvf_tf1.
+
+```{python}
+#| label: fig-ssf_tf1
+#| fig-cap: Simulated gain response compared to theoretical estimation.
+
+def Avssf1(s,Adc,wz,w0,Q):
+  num=Adc*(s/wz+1)
+  den=((s/w0)**2+s/(w0*Q)+1)
+  return num/den
+
+def Avssf2(s,Adc,w0,Q):
+  num=Adc
+  den=((s/w0)**2+s/(w0*Q)+1)
+  return num/den
+
+Npts=len(fsim)
+fthe=fsim
+AvmagdBthe=np.zeros(Npts)
+Avphidegthe=np.zeros(Npts)
+AvmagdBthe2=np.zeros(Npts)
+Avphidegthe2=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  AvmagdBthe[k]=20*log(abs(Avssf1(jw,Adc,wz,w0,Q)))
+  Avphidegthe[k]=np.angle(Avssf1(jw,Adc,wz,w0,Q),deg=True)
+  AvmagdBthe2[k]=20*log(abs(Avssf2(jw,Adc,w0,Q)))
+  Avphidegthe2[k]=np.angle(Avssf2(jw,Adc,w0,Q),deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+axs[0].semilogx(fsim,AvmagdBsim,'ro', markersize=3, markevery=10, label='simulation')
+axs[0].semilogx(fthe,AvmagdBthe2,'b--',label='without zero')
+axs[0].semilogx(fthe,AvmagdBthe,'b-',label='theory')
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylabel='$|A_v|$ [dB]')
+axs[0].set(ylim=(-80,40))
+axs[0].set_yticks(range(-80,60,20))
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='lower left')
+textstr1 = '\n'.join((
+  f'$I_{{D1}} =$ {ID1/1e-6:.3f} $\\mu A$',
+  f'$I_{{D2}} =$ {ID2/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[0].text(0.75, 0.95, textstr1, ha='left', va='top', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim,Avphidegsim,'ro', markersize=3, markevery=10, label='simulation')
+axs[1].semilogx(fthe,Avphidegthe2,'b--',label='without zero')
+axs[1].semilogx(fthe,Avphidegthe,'b-',label='theory')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-180,0))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_v\\}$ [degree]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-180,-135,-90,-45,0])
+axs[1].legend(loc='lower left')
+#textstr2 = '\n'.join((
+#  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+#  f'$C_L =$ {CL/1e-12:.0f} pF'))
+#axs[1].text(0.05, 0.5, textstr2, ha='left', va='center', transform=axs[1].transAxes, size=textFontSize,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+We see that the theoretical transfer function given by \eqref{eqn:ssf:tf1} matches the simulaton result reasonably well. From @tbl-ssf_small_signal_parameters1, we see that the zero frequency $f_z =$ `{python} f'{fz/1e6:.3f}'` MHz is way above the resonance frequency $f_0 =$ `{python} f'{f0/1e6:.3f}'` MHz and can therefore be neglected. This approximation with $\omega_z \rightarrow \infty$ is shown by the dashed lines in @fig-ssf_tf1.
+
+In many applications the peaking shown in @fig-ssf_tf1 is not acceptable. The step response will oscillate as shown in @fig-ssf_step and the settling time might be even longer than what is obtained by the SVF.
+
+```{python}
+#| label: fig-ssf_step
+#| fig-cap: FVF step response.
+
+circuitName = "ssf"
+simtype = ".tran"
+fileName = circuitName + simtype
+simulationPath = "./Simulations/SSF/ngspice/"
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+simulationVoltages = simulationPath + circuitName + ".op.ic"
+
+tstart=0
+tstop=1e-6
+tstep=1e-9
+
+if newSim:
+  simpar = '\n'.join((
+    f'.csparam tsart={tstart:.3e}',
+    f'.csparam tstop={tstop:.3e}',
+    f'.csparam tstep={tstep:.3e}'
+  ))
+  simparFile = simulationPath + "ssf.tran.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+regexp = re.compile(r'v\(out\)' + refloat)
+with open(simulationVoltages) as f:
+  for line in f:
+    match = re.search(regexp, line)
+    if match:
+      Voutqsim=float(match.group(1))
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+
+tsim=df_sim['time'].to_numpy()
+Vinsim=df_sim['Vin'].to_numpy()
+Voutsim=df_sim['Vout'].to_numpy()
+DVinsim=Vinsim-Vinq
+DVoutsim=Voutsim-Voutqsim
+
+Npts=len(tsim)
+tmin=tsim[0]
+tmax=tsim[Npts-1]
+
+#plt.plot([td/1e-6,(td+1/(2*pi*GBWthe))/1e-6],[0,DVin/1e-3], 'k--', linewidth=lw)
+#plt.plot([0,tmax/1e-6],[Voutfin/1e-3,Voutfin/1e-3], 'k--', linewidth=lw)
+plt.plot(tsim/1e-6,DVinsim/1e-3,'b-', label='Input')
+plt.plot(tsim/1e-6,DVoutsim/1e-3,'r-', label='Output (Sim.)')
+plt.xlim(0,1)
+plt.xticks(np.arange(0,1.1,0.1))
+plt.xlabel('Time [$\\mu s$]')
+plt.ylim(0,20)
+plt.ylabel('$\\Delta V_{in}$, $\\Delta V_{out}$ [mV]')
+plt.legend(loc='lower right')
+#plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+textstr = '\n'.join((
+  f'$V_{{in,q}} =$ {Vinq:.3f} V',
+  f'$V_{{outq}} =$ {Voutqsim:.3f} V'))
+plt.text(0.65, 0.95, textstr, ha='left', va='top', size=textFontSize, transform=plt.gca().transAxes,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+if savePlots: saveFigures(savePlotPath, otaName + '_step_response_small_sim')
+plt.show()
+```
+
+We now will try to better understand the issue by analyzing the circuit using feedback theory.
+
+## Feedback analysis {#sec-ssf-feedback}
+The SSF can be viewed as a general feedback system as shown in @fig-ssf_feedback1 with the feedback applied directly at the source of M~1~. If we now look at the small-signal schematic of @fig-ssf_gain, we see that the difference between the input and output voltage is perfomed at the input of transconductor $G_{m1}$. We can therefore represent this circuit as a feedback system with a feedback gain $\beta = 1$ as shown in @fig-ssf_feedback2. Since $\beta = 1$, $A_f(s)$ is also equal to the loop gain $L(s)$. The closed-loop gain is then given by
+\begin{equation}
+  A_v(s) = \frac{A_f(s)}{1 + A_f(s)}.
+\end{equation}
+
+::: {#fig-ssf-feedback layout-ncol=2}
+
+![General feedback system.](Figures/feedback1){width=60% #fig-ssf_feedback1}
+
+![SSF as a feedback system.](Figures/feedback2){width=60% #fig-ssf_feedback2}
+
+The SSF as a feedback system.
+:::
+
+To calculate the forward gain $A_f(s)$, we can *virtually* open the loop by setting $\Delta V_{out} = 0$ in the control voltage of $G_{m1}$. The feedback is then disabled and we can now calculate the forward gain $A_f(s)$ with the help of the circuit shown @fig-af.
+
+::: {#fig-af layout-ncol=2}
+
+![With capacitances](Figures/ssf_af){width=80% #fig-ssf_af}
+
+![DC.](Figures/ssf_af_dc){width=70% #fig-ssf_af_dc}
+
+Small-signal circuit to calculate the forward gain.
+:::
+
+We can start calculating the foward gain at DC with the help of the small-signal circuit shown in @fig-ssf_af_dc, which results in
+\begin{equation}
+  A_f(0) = \frac{G_{m1}\,G_{m2}}{G_{ds1}\,(G_{m2}+G_{ds2})} \cong \frac{G_{m1}}{G_{ds1}}.
+\end{equation}
+
+The closed-loop DC gain is then given by
+\begin{equation}
+  A_{dc} = \frac{G_{m1}\,G_{m2}}{G_{m1}\,G_{m2} + G_{ds1}\,(G_{m2}+G_{ds2})} \cong 1 \quad \textsf{for $G_{m1} \gg G_{ds1}$ and $G_{m2} \gg G_{ds2}$}.
+\end{equation}
+
+If we now account for the capacitances assuming that $C_L \gg C_{p1},C_{p2}$, we can derive the forward transfer function which is also the loop gain as
+\begin{equation}\label{eqn:ssf:af}
+  A_f(s) = L(s) \triangleq \frac{\Delta V_{out}}{\Delta V_{in}} = A_{f,dc}\,\frac{1+s/\omega_z}{(1+s/\omega_{p1})\,(1+s/\omega_{p2})}.
+\end{equation}
+The parameters can be derived assuming that the poles are sufficiently widely spaced (i.e. $\omega_{p1} \ll \omega_{p2}$) which results in
+\begin{align}
+  A_{f,dc} &\cong \frac{G_{m1}\,G_{m2}}{G_{ds1}\,(G_{m2}+G_{ds2})} \cong \frac{G_{m1}}{G_{ds1}},\label{eqn:af:adc}\\
+  \omega_z &\cong \frac{G_{m2}}{C_{p2}},\label{eqn:af:wz}\\
+  \omega_{p1} &\cong \frac{G_{m2}}{C_L + C_{p1}\,G_{m2}/G_{ds1}},\label{eqn:af:wp1}\\
+  \omega_{p2} &\cong \frac{G_{ds1}}{C_{p1}+C_{p2}}\,\left(1 + \frac{C_{p1}}{C_L}\,\frac{G_{m2}}{G_{ds1}}\right).\label{eqn:af:wp2}
+\end{align}
+We can consider that $\omega_{p1}$ is the dominant pole whereas $\omega_{p2}$ is the non-dominant pole.
+
+The parameters are calculated in @tbl-ssf_af_parameters.
+
+```{python}
+#| label: tbl-ssf_af_parameters
+#| tbl-cap: Estimation of the small-signal forward gain parameters.
+
+Afdc=Gm1/Gds1
+AfdcdB=20*log(abs(Afdc))
+wz=Gm2/Cp2
+fz=wz/(2*pi)
+wp1=Gm2/(CL+Cp1*Gm2/Gds1)
+fp1=wp1/(2*pi)
+wp2=Gds1/(Cp1+Cp2)*(1+Cp1/CL*Gm2/Gds1)
+fp2=wp2/(2*pi)
+wu=sqrt(Afdc*wp1*wp2)
+fu=wu/(2*pi)
+
+table = [["$A_{{f,dc}}$",f'{Afdc:.3f}',"-"],
+         ["$A_{{f,dc}}$",f'{AfdcdB:.3f}',"dB"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_{{p1}}$",f'{fp1/1e3:.3f}',"$kHz$"],
+         ["$f_{{p2}}$",f'{fp2/1e6:.3f}',"$MHz$"],
+         ["$f_u$",f'{fu/1e6:.3f}',"$MHz$"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+We see that the dominant and non-dominant poles are actually quite close to each other since the ratio $\omega_{p2}/\omega_{p1}$ is only about `{python} f'{wp2/wp1:.1f}'`. The forward gain is plotted versus frequency in @fig-ssf_af for the parameters given in @tbl-ssf_af_parameters.
+
+```{python}
+#| label: fig-ssf_af
+#| fig-cap: Theoretical forward gain (loop gain).
+
+def Af(s,Adc,wz,wp1,wp2):
+  num=Adc*(1+s/wz)
+  den=(1+s/wp1)*(1+s/wp2)
+  return num/den
+
+Npts=101
+logfmin=4
+logfmax=8
+fmin=pow(10,logfmin)
+fmax=pow(10,logfmax)
+fthe=np.logspace(logfmin,logfmax,Npts,endpoint=True,base=10.0)
+
+Afthe=np.zeros(Npts,dtype=complex)
+AfmagdBthe=np.zeros(Npts)
+Afphidegthe=np.zeros(Npts)
+Avthe=np.zeros(Npts,dtype=complex)
+AvmagdBthe=np.zeros(Npts)
+Avphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  Afthe[k]=Af(jw,Afdc,wz,wp1,wp2)
+  AfmagdBthe[k]=20*log(abs(Afthe[k]))
+  Afphidegthe[k]=np.angle(Afthe[k],deg=True)
+  Avthe[k]=Afthe[k]/(1+Afthe[k])
+  AvmagdBthe[k]=20*log(abs(Avthe[k]))
+  Avphidegthe[k]=np.angle(Avthe[k],deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+Afwp1=20*log(abs(Af(1j*wp1,Afdc,wz,wp1,wp2)))
+Afwp2=20*log(abs(Af(1j*wp2,Afdc,wz,wp1,wp2)))
+Avwu=20*log(abs(Af(1j*wu,Afdc,wz,wp1,wp2)/(1+Af(1j*wu,Afdc,wz,wp1,wp2))))
+PM=180+np.angle(Af(1j*wu,Afdc,wz,wp1,wp2),deg=True)
+
+axs[0].semilogx([fp1,fp1],[-30,Afwp1], 'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp1],[Afwp1,Afwp1], 'k--', linewidth=lw)
+axs[0].semilogx([fp2,fp2],[-30,Afwp2], 'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp2],[Afwp2,Afwp2], 'k--', linewidth=lw)
+axs[0].semilogx([fu,fu],[-30,Avwu], 'k--', linewidth=lw)
+axs[0].semilogx([1e4,fu],[0,0], 'k--', linewidth=lw)
+axs[0].semilogx(fthe,AfmagdBthe, 'r-', label='open-loop')
+axs[0].semilogx(fthe,AvmagdBthe, 'r--', label='closed-loop')
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(-30,50))
+axs[0].set_yticks(range(-30,60,10))
+axs[0].set(ylabel='$|A_f|$ [dB]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$A_{{dc,ol}} =$ {AfdcdB:.1f} dB',
+  f'$f_z =$ {fz/1e6:.0f} MHz',
+  f'$f_{{p1}} =$ {fp1/1e3:.0f} kHz',
+  f'$f_{{p2}} =$ {fp2/1e6:.3f} MHz',
+  f'$f_u =$ {fu/1e6:.1f} MHz',
+  f'$PM =$ {PM:.1f} $^{{\\circ}}$'))
+axs[0].text(0.03, 0.07, textstr1, ha='left', va='bottom', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fthe,Afphidegthe, 'b-', label='open-loop')
+axs[1].semilogx(fthe,Avphidegthe, 'b--', label='closed-loop')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-180,0))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_f\\}$ [degree]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-180,-135,-90,-45,0])
+#axs[1].legend(loc='lower left')
+textstr2 = '\n'.join((
+  f'$I_{{D1}} =$ {ID1/1e-6:.3f} $\\mu A$',
+  f'$I_{{D2}} =$ {ID2/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.05, 0.07, textstr2, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+We observe that $\omega_z$ is much higher than the unity gain frequency $\omega_u$ and that both $\omega_{p1}$ and $\omega_{p2}$ are smaller than the unity gain frequency. The unity gain frequency can therefore be approximated by
+\begin{equation}
+  \omega_u \cong \sqrt{|A_{dc,ol}|\,\omega_{p1}\,\omega_{p2}} \cong \sqrt{\frac{G_{m1}\,G_{m2}}{C_L\,(C_{p1}+C_{p2})}}.
+\end{equation}
+As shown in @fig-ssf_af, the unity gain frequency $\omega_u$ is actually a good estimation of the resonant frequency of the closed-loop transfer function. We also observe that the phase margin is very small $PM =$ `{python} f'{PM:.1f}'` $^{\circ}$ leading to a strong peaking at $\omega_0 \cong \omega_u$.
+
+The system can be compensated by adding a compensation capacitor $C_c$ at the drain of M~1~. Assuming now that $C_c \gg C_{p2}$ we get
+\begin{equation}\label{eqn:ssf:af:comp}
+  A_f(s) = L(s) \triangleq \frac{\Delta V_{out}}{\Delta V_{in}} = A_{f,dc}\,\frac{1+s/\omega_z}{(1+s/\omega_{p1})\,(1+s/\omega_{p2})}.
+\end{equation}
+The parameters can be derived assuming that $\omega_{p1} \ll \omega_{p2}$, resulting in
+\begin{align}
+  A_{f,dc} &\cong \frac{G_{m1}\,G_{m2}}{G_{ds1}\,(G_{m2}+G_{ds2})} \cong \frac{G_{m1}}{G_{ds1}},\label{ssf:af:adc:comp}\\
+  \omega_z &\cong \frac{G_{m2}}{C_c},\label{ssf:af:wz:comp}\\
+  \omega_{p1} &\cong \frac{G_{m2}}{C_L + C_c\,(1+G_{ds2}/G_{ds1})+C_{p1}\,G_{m2}/G_{ds1}},\label{ssf:af:wp1:comp}\\
+  \omega_{p2} &\cong \frac{G_{ds1}}{C_c}+\frac{G_{ds1}+G_{ds2}}{C_L}+\frac{G_{m2}\,C_{p1}}{C_L\,C_c}.\label{ssf:af:wp2:comp}
+\end{align}
+
+The parameters for the circuit with compensation capacitor $C_c$ at the drain of M~1~ are given in @tbl-ssf_af_parameters2. The open- and closed-loop transfer functions for these parameters are plotted in @fig-ssf_af2.
+
+```{python}
+#| label: tbl-ssf_af_parameters2
+#| tbl-cap: Estimation of the small-signal forward gain parameters with compensation capacitor $C_c$ at the drain of M~1~.
+
+Cc=CL
+Afdc=Gm1/Gds1
+AfdcdB=20*log(abs(Afdc))
+wz=Gm2/Cc
+fz=wz/(2*pi)
+wp1=Gm2/(CL+Cc*(1+Gds2/Gds1)+Cp1*Gm2/Gds1)
+fp1=wp1/(2*pi)
+wp2=Gds1/Cc+(Gds1+Gds2)/CL+Gm2*Cp1/(CL*Cc)
+fp2=wp2/(2*pi)
+wu=sqrt(Afdc*wp1*wp2)
+fu=wu/(2*pi)
+
+table = [["$C_L$",f'{CL/1e-12:.0f}',"$pF$"],
+         ["$C_c$",f'{Cc/1e-12:.3f}',"$pF$"],
+         ["$A_{{f,dc}}$",f'{Afdc:.3f}',"-"],
+         ["$A_{{f,dc}}$",f'{AfdcdB:.3f}',"dB"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_{{p1}}$",f'{fp1/1e3:.3f}',"$kHz$"],
+         ["$f_{{p2}}$",f'{fp2/1e3:.3f}',"$kHz$"],
+         ["$f_u$",f'{fu/1e6:.3f}',"$MHz$"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+
+```{python}
+#| label: fig-ssf_af2
+#| fig-cap: Theoretical forward gain (loop gain) and closed-loop gain with compensation capacitor $C_c$ at the drain of M~1~.
+
+def Af(s,Adc,wz,wp1,wp2):
+  num=Adc*(1+s/wz)
+  den=(1+s/wp1)*(1+s/wp2)
+  return num/den
+
+Npts=101
+logfmin=3
+logfmax=7
+fmin=pow(10,logfmin)
+fmax=pow(10,logfmax)
+fthe=np.logspace(logfmin,logfmax,Npts,endpoint=True,base=10.0)
+
+Afthe=np.zeros(Npts,dtype=complex)
+AfmagdBthe=np.zeros(Npts)
+Afphidegthe=np.zeros(Npts)
+Avthe=np.zeros(Npts,dtype=complex)
+AvmagdBthe=np.zeros(Npts)
+Avphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  Afthe[k]=Af(jw,Afdc,wz,wp1,wp2)
+  AfmagdBthe[k]=20*log(abs(Afthe[k]))
+  Afphidegthe[k]=np.angle(Afthe[k],deg=True)
+  Avthe[k]=Afthe[k]/(1+Afthe[k])
+  AvmagdBthe[k]=20*log(abs(Avthe[k]))
+  Avphidegthe[k]=np.angle(Avthe[k],deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+Afwp1=20*log(abs(Af(1j*wp1,Afdc,wz,wp1,wp2)))
+Afwp2=20*log(abs(Af(1j*wp2,Afdc,wz,wp1,wp2)))
+PM=180+np.angle(Af(1j*wu,Afdc,wz,wp1,wp2),deg=True)
+
+axs[0].semilogx([fp1,fp1],[-30,Afwp1], 'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp1],[Afwp1,Afwp1], 'k--', linewidth=lw)
+axs[0].semilogx([fp2,fp2],[-30,Afwp2], 'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp2],[Afwp2,Afwp2], 'k--', linewidth=lw)
+axs[0].semilogx([fu,fu],[-30,0], 'k--', linewidth=lw)
+axs[0].semilogx([fmin,fu],[0,0], 'k--', linewidth=lw)
+axs[0].semilogx(fthe,AfmagdBthe, 'r-', label='open-loop')
+axs[0].semilogx(fthe,AvmagdBthe, 'r--', label='closed-loop')
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(-30,50))
+axs[0].set_yticks(range(-30,60,10))
+axs[0].set(ylabel='$|A_f|$ [dB]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$A_{{dc,ol}} =$ {AfdcdB:.1f} dB',
+  f'$f_z =$ {fz/1e6:.0f} MHz',
+  f'$f_{{p1}} =$ {fp1/1e3:.0f} kHz',
+  f'$f_{{p2}} =$ {fp2/1e3:.1f} kHz',
+  f'$f_u =$ {fu/1e6:.1f} MHz',
+  f'$PM =$ {PM:.1f} $^{{\\circ}}$'))
+axs[0].text(0.05, 0.07, textstr1, ha='left', va='bottom', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fthe,Afphidegthe, 'b-', label='open-loop')
+axs[1].semilogx(fthe,Avphidegthe, 'b--', label='closed-loop')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-180,0))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_f\\}$ [degree]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-180,-135,-90,-45,0])
+#axs[1].legend(loc='lower left')
+textstr2 = '\n'.join((
+  f'$I_{{D1}} =$ {ID1/1e-6:.3f} $\\mu A$',
+  f'$I_{{D2}} =$ {ID2/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF',
+  f'$C_c =$ {Cc/1e-12:.0f} pF'))
+axs[1].text(0.05, 0.08, textstr2, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+From @fig-ssf_af2, we oberve that the phase margin has now increased to $PM =$ `{python} f'{PM:.1f}'` $^{\circ}$ and the peaking has almost disappeared resulting in a much better step response. On the other hand the SSF bandwidth has now decreased to that of the SVF. This mitigates the above finding that the SSF has a much larger bandwidth than the SVF. This observation was obtained without considering the parasitic capacitances and the need to compensate the circuit to obtain a reasonable step response.
+
+The main reason to use the SSF is therefore to take adavantage of its low output resistance. We will estimate the output impedance in the next section.
+
+## Output impedance
+The main reason to use the SSF instead of the SVF is its low output resistance @bib:surkanti:mwcas:2017. We now will derive an expression of the SSF output impedance first without compensation capacitance using the small-signal schematic shown in @fig-ssf_zout.
+
+![Small-signal schematic of the FVF for calculation of the output impedance.](Figures/ssf_zout){width=40% #fig-ssf_zout}
+
+If we assume that $C_L \gg C_{p1}, C_{p2}$, we get
+\begin{equation}\label{eqn:ssf:zout1}
+  Z_{out}(s) = R_{out}\,\frac{\frac{s}{\omega_z} + 1}{\left(\frac{s}{\omega_0}\right)^2 + \frac{s}{\omega_0\,Q} + 1}
+\end{equation}
+with
+\begin{align}
+  R_{out} &= \frac{G_{ds1}}{G_{m1}\,G_{m2}+G_{ds1}\,(G_{m2}+G_{ds2})} \cong \frac{G_{ds1}}{G_{m1}\,G_{m2}},\label{eqn:ssf:zout1:rout}\\
+  \omega_z &= \frac{G_{ds1}}{C_{p1}+C_{p2}},\label{eqn:ssf:zout1:wz}\\
+  \omega_0 &\cong \sqrt{\frac{G_{m1}\,G_{m2}}{C_L\,(C_{p1}+C_{p2})}},\label{eqn:ssf:zout1:w0}\\
+  Q &\cong \frac{\sqrt{C_L\,(C_{p1}+C_{p2})\,G_{m1}\,G_{m2}}}{C_L\,G_{ds1}+C_{p2}\,G_{m1}+C_{p1}\,G_{m2}}\label{eqn:ssf:zout1:q}.
+\end{align}
+The parameters for calculating the output impedance for the current design are given in @tbl-ssf_zout_parameters1.
+
+```{python}
+#| label: tbl-ssf_zout_parameters1
+#| tbl-cap: Estimation of the small-signal parameters for calculating the output impedance assuming that $C_L \gg C_{p1}, C_{p2}$.
+
+Routthe=Gds1/(Gm1*Gm2+Gds1*(Gm2+Gds2))
+Gm1Routthe=Gm1*Routthe
+wz=Gds1/(Cp1+Cp2)
+w0=sqrt(Gm1*Gm2/(CL*(Cp1+Cp2)))
+f0=w0/(2*pi)
+Q=sqrt(CL*(Cp1+Cp2)*Gm1*Gm2)/(CL*Gds1+Cp2*Gm1+Cp1*Gm2)
+
+table = [["$R_{{out}}$",f'{Routthe:.3f}',"$\Omega$"],
+         ["$G_{{m1}}\\,R_{{out}}$",f'{Gm1Routthe:.3e}',"-"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_0$",f'{f0/1e6:.3f}',"$MHz$"],
+         ["$Q$",f'{Q:.3f}',"-"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+From @tbl-ssf_zout_parameters1 we see that the output resistance $R_{out} = Z_{out}(0)$ is about `{python} f'{1/Gm1Routthe:.0f}'`-times smaller than that of the SVF. We can compare the theoretical expression \eqref{eqn:ssf:zout1} to ngspice simulations. The resulting output impedance normalized to that of the SVF $G_{m1}\,Z_{out}$ is compared to simulation results in @fig-ssf_zout_sim.
+
+```{python}
+#| label: fig-ssf_zout_sim
+#| fig-cap: Simulated output impedance normalized to $1/G_{m1}$ and compared to the theoretical expression assuming that $C_L \gg C_{p1}, C_{p2}$.
+
+def Zout(s,Rout,wz,w0,Q):
+  num=Rout*(s/wz+1)
+  den=((s/w0)**2+s/(w0*Q)+1)
+  return num/den
+
+circuitName="ssfzout"
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+fmin=1e5
+fmax=1e9
+Ndec=201
+
+if newSim:
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "ssfzout.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+Youtmagsim=df_sim['Youtmag'].to_numpy()
+Youtphidegsim=df_sim['Youtphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+fmax=fsim[Npts-1]
+
+Zoutmagsim=1/Youtmagsim
+Zoutphidegsim=-Youtphidegsim
+
+fthe=fsim
+Zoutthe=np.zeros(Npts,dtype=complex)
+Zoutmagthe=np.zeros(Npts)
+Zoutphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  Zoutthe[k]=Zout(jw,Routthe,wz,w0,Q)
+  Zoutmagthe[k]=abs(Zoutthe[k])
+  Zoutphidegthe[k]=np.angle(Zoutthe[k],deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+#axs[0].semilogx([fmin,fmax],[-3,-3],'k--', linewidth=lw)
+axs[0].loglog(fsim,Gm1*Zoutmagsim,'ro', markersize=3, markevery=12, label='simulation')
+axs[0].loglog(fthe,Gm1*Zoutmagthe,'b-',label='theory')
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(1e-3,1))
+axs[0].set(ylabel='$|G_{m1}\,Z_{out}|$ [-]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$R_{{out}} =$ {Routthe:.2f} $\Omega$',
+  f'$G_{{m1}}\\,R_{{out}} =$ {Gm1Routthe:.2e}',
+  f'$f_z =$ {fz/1e6:.1f} MHz',
+  f'$f_0 =$ {f0/1e6:.1f} MHz',
+  f'$Q =$ {Q:.1f}'))
+axs[0].text(0.05, 0.93, textstr1, ha='left', va='top', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim,Zoutphidegsim,'ro', markersize=3, markevery=12, label='simulation')
+axs[1].semilogx(fthe,Zoutphidegthe,'b-',label='theory')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-90,90))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{G_{m1}\,Z_{out}\\}$ [deg]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-90,-45,0,45,90])
+axs[1].legend(loc='upper right')
+textstr2 = '\n'.join((
+  f'$I_{{D1}} =$ {ID1/1e-6:.3f} $\\mu A$',
+  f'$I_{{D2}} =$ {ID2/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.05, 0.07, textstr2, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+
+```{python}
+Gm1sim=mos_df.at["M1","Gm"]
+Gds1sim=mos_df.at["M1","Gds"]
+Gm2sim=mos_df.at["M2","Gm"]
+Gds2sim=mos_df.at["M2","Gds"]
+
+Routsim=Gds1sim/(Gm1sim*Gm2sim+Gds1sim*(Gm2sim+Gds2sim))
+Gm1Routsim=Gm1sim*Routsim
+```
+
+We see that the estimated output resistance $R_{out} =$ `{python} f'{Routthe:.3f}'` $\Omega$ and $G_{m1}\,R_{out} =$ `{python} f'{Gm1Routthe:.3e}'` are larger than the simulated values $R_{out} =$ `{python} f'{Routsim:.3f}'` $\Omega$ and $G_{m1}\,R_{out} =$ `{python} f'{Gm1Routsim:.3e}'`. This is due to the difference between the estimated and simulated values of the transistor output conductances $G_{ds1}$ and $G_{ds2}$. Indeed the simulated values of the output conductances are $G_{ds1} =$ `{python} f'{Gds1sim/1e-9:.0f}'` $nA/V$ and $G_{ds2} =$ `{python} f'{Gds2sim/1e-9:.0f}'` $nA/V$ compared to $G_{ds1} =$ `{python} f'{Gds1/1e-9:.0f}'` $nA/V$ and $G_{ds2} =$ `{python} f'{Gds2/1e-9:.0f}'` $nA/V$ for the theoretical estimations.
+
+We have seen that to avoid the strong peaking in the closed-loop transfer function, we can add a compensation capacitor which lowers the dominant pole of the open-loop transfer function avoiding the peaking in the closed-loop transfer function. The drawback is that it significantly reduces the bandwidth, canceling the advantage of the SSF compared to the SVF. How does the compensation capacitance affect the output impedance?
+
+Let's consider the case where the compensation capacitor $C_c$ is connected between the drain of M~1~ and ground. If we assume that $C_c$ is of the same order of magnitude than the load capacitance $C_L$ and that $C_L,C_c \gg C_{p1},C_{p2}$, we get the same expression for $Z_{out}$ than in \eqref{eqn:ssf:zout1} but with the following parameters
+\begin{align}
+  R_{out} &\cong \frac{G_{ds1}}{G_{m1}\,G_{m2}},\label{eqn:ssf:zout4:rout}\\
+  \omega_z &= \frac{G_{ds1}}{C_c},\label{eqn:ssf:zout4:wz}\\
+  \omega_0 &\cong \sqrt{\frac{G_{m1}\,G_{m2}}{C_L\,C_c}},\label{eqn:ssf:zout4:w0}\\
+  Q &\cong \sqrt{\frac{C_L}{C_c}\,\frac{G_{m1}}{G_{m2}}}.\label{eqn:ssf:zout4:q}
+\end{align}
+The parameters are calculated in @tbl-ssf_rout_parameters2 and the corresponding output impedance normalized to the resistance of the SVF $1/G_{m1}$ is plotted versus frequency in @fig-ssf_zout_sim2.
+
+```{python}
+#| label: tbl-ssf_rout_parameters2
+#| tbl-cap: Estimation of the small-signal parameters for calculating the output impedance with a compensating capacitance $C_c$ assuming that $C_L, C_c \gg C_{p1}, C_{p2}$ and $G_{m1} \gg G_{ds1}$ and $G_{m2} \gg G_{ds2}$.
+
+Cc=CL
+Rout=Gds1/(Gm1*Gm2)
+Gm1Rout=Gm1*Rout
+wz=Gds1/(Cc+Cp1)
+fz=wz/(2*pi)
+#w0=sqrt(Gm1*Gm2/(CL*Cc))
+w0=sqrt((Gm1*Gm2+Gds1*(Gm2+Gds2))/(CL*Cp1+Cc*(CL+Cp1)))
+f0=w0/(2*pi)
+#Q=sqrt((CL/Cc*Gm1/Gm2))
+Q=sqrt((CL*Cp1+Cc*(CL+Cp1))*(Gm1*Gm2+Gds1*(Gm2+Gds2)))/(CL*Gds1+Cc*(Gm1+Gds1+Gds2)+Cp1*(Gm2+Gds2))
+
+table = [["$R_{{out}}$",f'{Rout:.3f}',"$\Omega$"],
+         ["$G_{{m1}}\\,R_{{out}}$",f'{Gm1Rout:.3e}',"-"],
+         ["$f_z$",f'{fz/1e3:.3f}',"$kHz$"],
+         ["$f_0$",f'{f0/1e6:.3f}',"$MHz$"],
+         ["$Q$",f'{Q:.3f}',"-"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+
+```{python}
+#| label: fig-ssf_zout_sim2
+#| fig-cap: Simulated output impedance normalized to $1/G_{m1}$ and compared to the theoretical expression with a compensation capacitance $C_c = C_L$ and assuming that $C_L, C_c \gg C_{p1}, C_{p2}$ and $G_{m1} \gg G_{ds1}$ and $G_{m2} \gg G_{ds2}$.
+
+def Zout(s,Rout,wz,w0,Q):
+  num=Rout*(s/wz+1)
+  den=((s/w0)**2+s/(w0*Q)+1)
+  return num/den
+
+circuitName="ssfzout2"
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+fmin=1e2
+fmax=1e8
+Ndec=201
+
+if newSim:
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "ssfzout2.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+Youtmagsim=df_sim['Youtmag'].to_numpy()
+Youtphidegsim=df_sim['Youtphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+fmax=fsim[Npts-1]
+
+Zoutmagsim=1/Youtmagsim
+Zoutphidegsim=-Youtphidegsim
+
+fthe=fsim
+Zoutthe=np.zeros(Npts,dtype=complex)
+Zoutmagthe=np.zeros(Npts)
+Zoutphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  Zoutthe[k]=Zout(jw,Rout,wz,w0,Q)
+  Zoutmagthe[k]=abs(Zoutthe[k])
+  Zoutphidegthe[k]=np.angle(Zoutthe[k],deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+axs[0].loglog(fsim,Gm1*Zoutmagsim,'ro', markersize=3, markevery=16, label='simulation')
+axs[0].loglog(fthe,Gm1*Zoutmagthe,'b-',label='theory')
+axs[0].loglog([fmin,fz],[Gm1Rout,Gm1Rout],'k--', linewidth=lw)
+axs[0].loglog([fz,f0],[Gm1Rout,1],'k--', linewidth=lw)
+axs[0].loglog([f0,fmax],[1,1e-2],'k--', linewidth=lw)
+axs[0].loglog([fz,fz],[1e-3,Gm1Rout],'k--', linewidth=lw)
+axs[0].loglog([f0,f0],[1e-3,1],'k--', linewidth=lw)
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(1e-3,10))
+axs[0].set(ylabel='$|G_{m1}\,Z_{out}|$ [-]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='lower right')
+textstr1 = '\n'.join((
+  f'$R_{{out}} =$ {Rout:.2f} $\Omega$',
+  f'$G_{{m1}}\\,R_{{out}} =$ {Gm1Rout:.2e}',
+  f'$f_z =$ {fz/1e3:.1f} kHz',
+  f'$f_0 =$ {f0/1e6:.1f} MHz',
+  f'$Q =$ {Q:.1f}'))
+axs[0].text(0.04, 0.93, textstr1, ha='left', va='top', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim,Zoutphidegsim,'ro', markersize=3, markevery=12, label='simulation')
+axs[1].semilogx(fthe,Zoutphidegthe,'b-',label='theory')
+axs[1].semilogx([fmin,fz],[45,45],'k--', linewidth=lw)
+axs[1].semilogx([fz,fz],[45,90],'k--', linewidth=lw)
+axs[1].semilogx([fmin,f0],[0,0],'k--', linewidth=lw)
+axs[1].semilogx([f0,f0],[0,90],'k--', linewidth=lw)
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-90,90))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{G_{m1}\,Z_{out}\\}$ [deg]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-90,-45,0,45,90])
+axs[1].legend(loc='upper right')
+textstr2 = '\n'.join((
+  f'$I_{{D1}} =$ {ID1/1e-6:.3f} $\\mu A$',
+  f'$I_{{D2}} =$ {ID2/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF',
+  f'$C_c =$ {Cc/1e-12:.0f} pF'))
+axs[1].text(0.04, 0.07, textstr2, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+The low output resistance now only holds up to the frequency of the zero $f_z =$ `{python} f'{fz/1e3:.3f}'` $kHz$. Above that it increases to reach the value obtained by the SVF at the resonance frequency $f_0 =$ `{python} f'{f0/1e6:.3f}'` $MHz$.
+
+## Stability analysis
+In the previous sections we have seen that the SSF closed-loop transfer function shows a strong peaking that might degrade the step response. The step response can be improved by adding a compensation capacitance that lowers the dominant pole at the cost of a lower bandwidth for the same current consumption.
+
+In this Section we want to analyze the stability of the circuit by setting an appropriate DC voltage at the input, opening the loop by disconnecting the gate of M~2~, applying a test signal at its gate and looking the signal that is fed back to the drain of M~1~ (small-signal voltage $\Delta V_2$) as shown in @fig-ssf_open_loop.
+
+![Small-signal schematic of the SSF for analyzing the stability by opening the loop at the gate of M~2~.](Figures/ssf_open_loop){width=40% #fig-ssf_open_loop}
+
+::: {.callout-note}
+Note that strictly speaking, a 2^nd^-order system is actually always stable, because the phase only tends to $180^{\circ}$ asymptotically. However, because of additional high frequency poles, the phase may turn more than $180^{\circ}$ and lead to an unstable system.
+:::
+
+The open-loop gain $A_{ol}(s)$ which also corresponds to the loop-gain $L(s)$ is given by
+\begin{equation}\label{eqn:ssf:aol}
+  A_{ol}(s) = L(s) \triangleq \frac{\Delta V_2}{\Delta V_{test}} = A_{dc,ol}\,\frac{1+s/\omega_z}{(1+s/\omega_{p1})\,(1+s/\omega_{p2})}.
+\end{equation}
+The parameters can be derived assuming that the poles are sufficiently widely separated (i.e. $\omega_{p1} \ll \omega_{p2}$) which results in
+\begin{align}
+  A_{dc,ol} &= -\frac{(G_{m1}+G_{ds1})\,G_{m2}}{G_{ds1}\,G_{ds2}} \cong \frac{G_{m1}\,G_{m2}}{G_{ds1}\,G_{ds2}},\label{eqn:ssf:aol:adc}\\
+  \omega_z &= \frac{G_{m1}+G_{ds1}}{C_{p1}} \cong \frac{G_{m1}}{C_{p1}},\label{eqn:ssf:aol:wz}\\
+  \omega_{p1} &= \frac{G_{ds1}\,G_{ds2}}{C_L\,G_{ds1} + C_{p1}\,G_{ds2} + C_{p2}\,(G_{m1}+G_{ds1}+G_{ds2})}
+  \cong \frac{G_{ds2}}{C_L + C_{p2}\,G_{m1}/G_{ds1}},\label{eqn:ssf:aol:wp1}\\
+  \omega_{p2} &= \frac{C_L\,G_{ds1} + C_{p1}\,G_{ds2} + C_{p2}\,(G_{m1}+G_{ds1}+G_{ds2})}{C_{p1}\,C_{p2}+C_L\,(C_{p1}+C_{p2})}
+  \cong \frac{G_{ds1}}{C_{p1}+C_{p2}}\,\left(1 + \frac{C_{p2}}{C_L}\,\frac{G_{m1}}{G_{ds1}}\right).\label{eqn:ssf:aol:wp2}
+\end{align}
+We can consider that $\omega_{p1}$ is the dominant pole whereas $\omega_{p2}$ is the non-dominant pole.
+
+The small-signal parameters are recalculated in @tbl-ssf_ol_parameters1.
+
+::: {.callout-note}
+Note that the loop-gain given by \eqref{eqn:ssf:aol} is different than the loop-gain given by \eqref{eqn:ssf:af}. This is because the input and output voltages are not the same leading to different transfer functions. The feedback analysis was done more from the perspective of the input to output signal path, whereas the stability analysis only looks at the loop gain from a stability perspective without consideration on the signal path. 
+:::
+
+```{python}
+#| label: tbl-ssf_ol_parameters1
+#| tbl-cap: Estimation of the small-signal parameters for the calculation of the open-loop gain.
+
+def Aol(s,Adc,wz,wp1,wp2):
+  num=Adc*(1+s/wz)
+  den=(1+s/wp1)*(1+s/wp2)
+  return num/den
+
+#Gds1=mos_df.at["M1","Gds"]
+#Gds2=mos_df.at["M2","Gds"]
+
+CG2=CGS2+CGB2
+
+Adcthe=Gm1*Gm2/(Gds1*Gds2)
+AdcdBthe=20*log(Adcthe)
+wz=Gm1/Cp1
+fz=wz/(2*pi)
+wp1=Gds2/(CL+Cp2*(Gm1/Gds1))
+fp1=wp1/(2*pi)
+wp2=Gds1/(Cp1+Cp2)*(1+Cp2/CL*Gm1/Gds1)
+fp2=wp2/(2*pi)
+wu=sqrt(Adcthe*wp1*wp2)
+fu=wu/(2*pi)
+PM=180+np.angle(Aol(1j*wu,Adcthe,wz,wp1,wp2),deg=True)
+
+table = [["$G_{{m1}}$",f'{Gm1/1e-6:.3f}',"$\\mu A/V$"],
+         ["$G_{{m2}}$",f'{Gm2/1e-6:.3f}',"$\\mu A/V$"],
+         ["$G_{{ds1}}$",f'{Gds1/1e-9:.3f}',"$nA/V$"],
+         ["$G_{{ds2}}$",f'{Gds2/1e-9:.3f}',"$nA/V$"],
+         ["$G_{{m1}}/G_{{ds1}}$",f'{A1:.3f}',"-"],
+         ["$G_{{m1}}/G_{{ds1}}$",f'{20*log(abs(A1)):.3f}',"dB"],
+         ["$G_{{m2}}/G_{{ds2}}$",f'{A2:.3f}',"-"],
+         ["$G_{{m2}}/G_{{ds2}}$",f'{20*log(abs(A2)):.3f}',"dB"],
+         ["$C_{{p1}}$",f'{Cp1/1e-15:.3f}',"$fF$"],
+         ["$C_{{p2}}$",f'{Cp2/1e-15:.3f}',"$fF$"],
+         ["$A_{{dc}}$",f'{Adcthe:.3f}',"-"],
+         ["$A_{{dc}}$",f'{AdcdBthe:.3f}',"dB"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_{{p1}}$",f'{fp1/1e3:.3f}',"$kHz$"],
+         ["$f_{{p2}}$",f'{fp2/1e6:.3f}',"$MHz$"],
+         ["$f_u$",f'{fu/1e6:.3f}',"$MHz$"],
+         ["$PM$",f'{PM:.3f}',"$^{{\\circ}}$"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+![Schematic of the SSF used for the simulation of the open-loop gain.](Figures/ssf_openloop_sim){width=60% #fig-ssf_openloop_sim}
+
+We can simulate the open-loop transfer function using the schematic shown in @fig-ssf_openloop_sim. We need to add two transistors M~3~ and M~4~ to generate the DC bias voltage that needs to be applied to the gate of M~2~ to have the correct bias current.
+
+Note that since we now have opened the loop disconnecting the gate of M~2~, the parasitic capacitances associated to its gate, namely $C_{GS2}$, $C_{GB2}$ and $C_{GD2}$ no more load the drain of M~1~. We therefore have to add them to the circuit to be simulated. This is why we have added in the netlist a capacitance $CGD2$ of value $C_{GD2}$ between the drain and source of M~1~ and a capacitance $CG2$ of value $C_{G2} = C_{GS2} + C_{GB2}$ between the drain of M~1~ and ground.
+
+::: {.callout-warning}
+When opening the loop in a feedback system, we always need to make sure that opening the loop does not change the impedances seen at the node where the loop is opened.
+:::
+
+The simulation results of the open-loop gain are compared to the theoretical estimation in @fig-fvf_oltf1.
+
+```{python}
+#| label: fig-ssf_oltf1
+#| fig-cap: Simulated gain response compared to theoretical estimation.
+
+circuitName="ssfol"
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+fmin=1e2
+fmax=1e9
+Ndec=201
+
+if newSim:
+  paramstr = '\n'.join((
+    f'.param VDD={VDD:.1f} Vinq={Vinq:.3f} Ib1={Ib1/1e-6:.3f}u Ib2={Ib2/1e-6:.3f}u',
+    f'.param CL={CL/1e-12:.3f}p CGD2={CGD2/1e-15:.3f}f CG2={CG2/1e-15:.3f}f',
+    f'.param W1={W1/1e-6:.2f}u L1={L1/1e-6:.2f}u AD={AD1:.2e} PD={PD1:.2e}',
+    f'.param W2={W2/1e-6:.2f}u L2={L2/1e-6:.2f}u AD={AD2:.2e} PD={PD2:.2e}'
+  ))
+  # Write the transistors sizes and bias to the ngspice directory
+  with open(simulationPath+'size_bias4.par', 'w') as f:
+    f.write(paramstr)
+  # Write the transistors sizes and bias to the qucs-s directory
+  with open(qucsPath+'size_bias4.par', 'w') as f:
+    f.write(paramstr)
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "ssfol.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+AmagdBsim=df_sim['AmagdB'].to_numpy()
+Aphidegsim=df_sim['Aphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+fmax=fsim[Npts-1]
+
+fthe=fsim
+
+AmagdBthe=np.zeros(Npts)
+Aphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  AmagdBthe[k]=20*log(abs(Aol(jw,Adcthe,wz,wp1,wp2)))
+  Aphidegthe[k]=np.angle(Aol(jw,Adcthe,wz,wp1,wp2),deg=True)
+
+Aphidegsim=Aphidegsim-180
+#Aolphidegthe=Aolphidegthe
+
+regexp = re.compile(r'adc' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      AdcdBsim=float(match.group(1))
+
+regexp = re.compile(r'fp1' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      fp1sim=float(match.group(1))
+
+regexp = re.compile(r'fp2' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      fp2sim=float(match.group(1))
+
+regexp = re.compile(r'gbw' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      gbwsim=float(match.group(1))
+
+regexp = re.compile(r'pgbw' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      pgbwsim=float(match.group(1))
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+AmagdBthefp1=20*log(abs(Aol(1j*wp1,Adcthe,wz,wp1,wp2)))
+AmagdBthefp2=20*log(abs(Aol(1j*wp2,Adcthe,wz,wp1,wp2)))
+Aphidegthefu=np.angle(Aol(1j*wu,Adcthe,wz,wp1,wp2),deg=True)
+
+axs[0].semilogx(fsim, AmagdBsim, 'ro', markersize=3, markevery=20, label='simulation')
+axs[0].semilogx(fthe, AmagdBthe, 'b-',label='theory')
+axs[0].semilogx([fp1,fp1],[-60,AmagdBthefp1],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp1],[AmagdBthefp1,AmagdBthefp1],'k--', linewidth=lw)
+axs[0].semilogx([fp2,fp2],[-60,AmagdBthefp2],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp2],[AmagdBthefp2,AmagdBthefp2],'k--', linewidth=lw)
+axs[0].semilogx([fu,fu],[-60,0],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fu],[0,0],'k--', linewidth=lw)
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylabel='$|A_{{ol}}|$ [dB]')
+axs[0].set(ylim=(-60,120))
+axs[0].set_yticks(range(-60,140,20))
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$A_{{dc}} =$ {AdcdBthe:.1f} dB (theory)',
+  f'$A_{{dc}} =$ {AdcdBsim:.1f} dB (sim)',
+  f'$f_z =$ {fz/1e6:.1f} MHz',
+  f'$f_{{p1}} =$ {fp1/1e3:.1f} kHz (theory)',
+  f'$f_{{p1}} =$ {fp1sim/1e3:.1f} kHz (sim)',
+  f'$f_{{p2}} =$ {fp2/1e6:.1f} MHz (theory)',
+  f'$f_{{p2}} =$ {fp2sim/1e6:.1f} MHz (sim)'))
+axs[0].text(1.04, 0.5, textstr1, ha='left', va='center', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim, Aphidegsim, 'ro', markersize=3, markevery=18, label='simulation')
+axs[1].semilogx(fsim, Aphidegthe, 'b-',label='theory')
+axs[1].semilogx([fp1,fp1],[-45,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fp1],[-45,-45],'k--', linewidth=lw)
+axs[1].semilogx([fp2,fp2],[-135,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fp2],[-135,-135],'k--', linewidth=lw)
+axs[1].semilogx([fu,fu],[Aphidegthefu,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fu],[Aphidegthefu,Aphidegthefu],'k--', linewidth=lw)
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_{{ol}}\\}$ [degree]')
+axs[1].set(xlim=(fmin,fmax))
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set(ylim=(-180,0))
+axs[1].set_yticks([-180,-135,-90,-45,0])
+axs[1].legend(loc='upper right')
+textstr2 = '\n'.join((
+  f'$GBW =$ {fu/1e6:.1f} MHz (theory)',
+  f'$GBW =$ {gbwsim/1e6:.1f} MHz (sim)',
+  f'$PM =$ {PM:.1f} deg (theory)',
+  f'$PM =$ {pgbwsim:.1f} deg (sim)'))
+axs[1].text(1.04, 0.5, textstr2, ha='left', va='center', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+textstr3 = '\n'.join((
+  f'$I_{{D1}} =$ {ID1/1e-6:.3f} $\\mu A$',
+  f'$I_{{D2}} =$ {ID2/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.04, 0.07, textstr3, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+We see a reasonable match between the simulation and the theoretical results. The discrepancy below the unity gain frequency is only due to an overestimation of the transistor output conductances $G_{ds1}$ and $G_{ds2}$. We can see that the circuit is actually stable but with a very small phase margin $PM =$ `{python} f'{PM:.1f}'`$^{\circ}$.
+
+If we add a compensation capacitance $C_c$ of the same order of magnitude than $C_L$ in parallel to $C_{p2}$, then \eqref{eqn:ssf:aol} remains unchanged but the parameters assuming that $C_{p1}, C_{p2} \ll C_L, C_c$, $G_{ds1} \ll G_{m1}$ and $G_{ds2} \ll G_{m2}$ become
+\begin{align}
+  A_{dc,ol} &\cong \frac{G_{m1}\,G_{m2}}{G_{ds1}\,G_{ds2}},\label{eqn:ssf:aol:comp:adc}\\
+  \omega_z &\cong \frac{G_{m1}}{C_{p1}},\label{eqn:ssf:aol:comp:wz}\\
+  \omega_{p1} &\cong \frac{G_{ds1}\,G_{ds2}}{C_c\,G_{m1}},\label{eqn:ssf:aol:comp:wp1}\\
+  \omega_{p2} &\cong \frac{G_{m1}}{C_L}.\label{eqn:ssf:aol:comp:wp2}
+\end{align}
+Adding a compensation capacitor $C_c$ at the drain of M~1~ will reduce the dominant pole and increase the non-dominant up to $G_{m1}/C_L$, without affecting the zero. This is similar to the pole splitting technique that is used for compensating OPAMPs @bib:gray:book:2009.
+
+The small-signal parameters calculated for a compensation capacitance value equal to the load capacitance results in the parameters given in @tbl-ssf_ol_parameters2. The loop-gain for these parameters is compared to simulations in @fig-ssf_oltf2.
+
+```{python}
+#| label: tbl-ssf_ol_parameters2
+#| tbl-cap: Estimation of the small-signal parameters for the calculation of the open-loop gain with compensation capacitance.
+Cc=CL
+Cp2=Cc
+Adcthe=(Gm1+Gds1)*Gm2/(Gds1*Gds2)
+AdcdBthe=20*log(Adcthe)
+wz=(Gm1+Gds1)/Cp1
+fz=wz/(2*pi)
+wp1=Gds1*Gds2/(CL*Gds1+Cp1*Gds2+Cp2*(Gm1+Gds1+Gds2))
+fp1=wp1/(2*pi)
+wp2=(CL*Gds1+Cp1*Gds2+Cp2*(Gm1+Gds1+Gds2))/(Cp1*Cp2+CL*(Cp1+Cp2))
+fp2=wp2/(2*pi)
+wu=sqrt(Adcthe*wp1*wp2)
+fu=wu/(2*pi)
+PM=180+np.angle(Aol(1j*wu,Adcthe,wz,wp1,wp2),deg=True)
+
+table = [["$C_L$",f'{CL/1e-12:.0f}',"$pF$"],
+         ["$C_c$",f'{Cc/1e-12:.3f}',"$pF$"],
+         ["$A_{{dc}}$",f'{Adcthe:.3f}',"-"],
+         ["$A_{{dc}}$",f'{AdcdBthe:.3f}',"dB"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_{{p1}}$",f'{fp1/1e3:.3f}',"$kHz$"],
+         ["$f_{{p2}}$",f'{fp2/1e6:.3f}',"$MHz$"],
+         ["$f_u$",f'{fu/1e6:.3f}',"$MHz$"],
+         ["$PM$",f'{PM:.3f}',"$^{{\\circ}}$"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+```{python}
+#| label: fig-ssf_oltf2
+#| fig-cap: Simulated gain response compared to theoretical estimation.
+
+circuitName="ssfol2"
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+if newSim:
+  paramstr = '\n'.join((
+    f'.param VDD={VDD:.1f} Vinq={Vinq:.3f} Ib1={Ib1/1e-6:.3f}u Ib2={Ib2/1e-6:.3f}u',
+    f'.param CL={CL/1e-12:.3f}p Cc={Cc/1e-12:.3f}p CGD2={CGD2/1e-15:.3f}f CG2={CG2/1e-15:.3f}f',
+    f'.param W1={W1/1e-6:.2f}u L1={L1/1e-6:.2f}u AD={AD1:.2e} PD={PD1:.2e}',
+    f'.param W2={W2/1e-6:.2f}u L2={L2/1e-6:.2f}u AD={AD2:.2e} PD={PD2:.2e}'
+  ))
+  # Write the transistors sizes and bias to the ngspice directory
+  with open(simulationPath+'size_bias2.par', 'w') as f:
+    f.write(paramstr)
+  fmin=1e0
+  fmax=1e8
+  Ndec=201
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "ssfol2.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+AmagdBsim=df_sim['AmagdB'].to_numpy()
+Aphidegsim=df_sim['Aphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+fmax=fsim[Npts-1]
+
+fthe=fsim
+
+AmagdBthe=np.zeros(Npts)
+Aphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  AmagdBthe[k]=20*log(abs(Aol(jw,Adcthe,wz,wp1,wp2)))
+  Aphidegthe[k]=np.angle(Aol(jw,Adcthe,wz,wp1,wp2),deg=True)
+
+Aphidegsim=Aphidegsim-180
+#Aolphidegthe=Aolphidegthe
+
+regexp = re.compile(r'adc' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      AdcdBsim=float(match.group(1))
+
+regexp = re.compile(r'fp1' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      fp1sim=float(match.group(1))
+
+regexp = re.compile(r'fp2' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      fp2sim=float(match.group(1))
+
+regexp = re.compile(r'gbw' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      gbwsim=float(match.group(1))
+
+regexp = re.compile(r'pgbw' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      pgbwsim=float(match.group(1))
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+AmagdBthefp1=20*log(abs(Aol(1j*wp1,Adcthe,wz,wp1,wp2)))
+AmagdBthefp2=20*log(abs(Aol(1j*wp2,Adcthe,wz,wp1,wp2)))
+Aphidegthefu=np.angle(Aol(1j*wu,Adcthe,wz,wp1,wp2),deg=True)
+
+axs[0].semilogx(fsim, AmagdBsim, 'ro', markersize=3, markevery=20, label='simulation')
+axs[0].semilogx(fthe, AmagdBthe, 'b-',label='theory')
+axs[0].semilogx([fp1,fp1],[-60,AmagdBthefp1],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp1],[AmagdBthefp1,AmagdBthefp1],'k--', linewidth=lw)
+axs[0].semilogx([fp2,fp2],[-60,AmagdBthefp2],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp2],[AmagdBthefp2,AmagdBthefp2],'k--', linewidth=lw)
+axs[0].semilogx([fu,fu],[-60,0],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fu],[0,0],'k--', linewidth=lw)
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylabel='$|A_{{ol}}|$ [dB]')
+axs[0].set(ylim=(-60,120))
+axs[0].set_yticks(range(-60,140,20))
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$A_{{dc}} =$ {AdcdBthe:.1f} dB (theory)',
+  f'$A_{{dc}} =$ {AdcdBsim:.1f} dB (sim)',
+  f'$f_z =$ {fz/1e6:.1f} MHz',
+  f'$f_{{p1}} =$ {fp1:.1f} Hz (theory)',
+  f'$f_{{p1}} =$ {fp1sim:.1f} Hz (sim)',
+  f'$f_{{p2}} =$ {fp2/1e6:.1f} MHz (theory)',
+  f'$f_{{p2}} =$ {fp2sim/1e6:.1f} MHz (sim)'))
+axs[0].text(1.04, 0.5, textstr1, ha='left', va='center', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim, Aphidegsim, 'ro', markersize=3, markevery=20, label='simulation')
+axs[1].semilogx(fsim, Aphidegthe, 'b-',label='theory')
+axs[1].semilogx([fp1,fp1],[-45,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fp1],[-45,-45],'k--', linewidth=lw)
+axs[1].semilogx([fp2,fp2],[-135,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fp2],[-135,-135],'k--', linewidth=lw)
+axs[1].semilogx([fu,fu],[Aphidegthefu,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fu],[Aphidegthefu,Aphidegthefu],'k--', linewidth=lw)
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_{{ol}}\\}$ [degree]')
+axs[1].set(xlim=(fmin,fmax))
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set(ylim=(-180,0))
+axs[1].set_yticks([-180,-135,-90,-45,0])
+axs[1].legend(loc='upper right')
+textstr2 = '\n'.join((
+  f'$GBW =$ {fu/1e6:.1f} MHz (theory)',
+  f'$GBW =$ {gbwsim/1e6:.1f} MHz (sim)',
+  f'$PM =$ {PM:.1f} deg (theory)',
+  f'$PM =$ {pgbwsim:.1f} deg (sim)'))
+axs[1].text(1.04, 0.5, textstr2, ha='left', va='center', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+textstr3 = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.04, 0.07, textstr3, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+We see a very good match between the theoretical estimation and the simulation result except at low frequency. This is again due to the higher estimated values of the output conductances $G_{ds1}$ and $G_{ds2}$ compared to the simulated values. The phase margin has now increased to $PM =$ `{python} f'{pgbwsim:.1f}'` $^{\circ}$ which will ensure an acceptable step response which still shows some overshoot as shown in @fig-ssf_step2.
+
+```{python}
+#| label: fig-ssf_step2
+#| fig-cap: FVF step response with compensation capacitor $C_c$.
+
+circuitName = "ssf2"
+simtype = ".tran"
+fileName = circuitName + simtype
+simulationPath = "./Simulations/SSF/ngspice/"
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+simulationVoltages = simulationPath + "ssf.op.ic"
+
+if newSim:
+  paramstr = '\n'.join((
+    f'.param VDD={VDD:.1f} Vinq={Vinq:.3f} Ib1={Ib1/1e-6:.3f}u Ib2={Ib2/1e-6:.3f}u',
+    f'.param CL={CL/1e-12:.3f}p Cc={Cc/1e-12:.3f}p',
+    f'.param W1={W1/1e-6:.2f}u L1={L1/1e-6:.2f}u AD={AD1:.2e} PD={PD1:.2e}',
+    f'.param W2={W2/1e-6:.2f}u L2={L2/1e-6:.2f}u AD={AD2:.2e} PD={PD2:.2e}'
+  ))
+  # Write the transistors sizes and bias to the ngspice directory
+  with open(simulationPath+'size_bias2.par', 'w') as f:
+    f.write(paramstr)
+  # Write the transistors sizes and bias to the qucs-s directory
+  with open(qucsPath+'size_bias2.par', 'w') as f:
+    f.write(paramstr)
+  tstart=0
+  tstop=3e-6
+  tstep=1e-9
+  simpar = '\n'.join((
+    f'.csparam tsart={tstart:.3e}',
+    f'.csparam tstop={tstop:.3e}',
+    f'.csparam tstep={tstep:.3e}'
+  ))
+  simparFile = simulationPath + "ssf2.tran.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+regexp = re.compile(r'v\(out\)' + refloat)
+with open(simulationVoltages) as f:
+  for line in f:
+    match = re.search(regexp, line)
+    if match:
+      Voutqsim=float(match.group(1))
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+
+tsim=df_sim['time'].to_numpy()
+Vinsim=df_sim['Vin'].to_numpy()
+Voutsim=df_sim['Vout'].to_numpy()
+DVinsim=Vinsim-Vinq
+DVoutsim=Voutsim-Voutqsim
+
+Npts=len(tsim)
+tmin=tsim[0]
+tmax=tsim[Npts-1]
+
+#plt.plot([td/1e-6,(td+1/(2*pi*GBWthe))/1e-6],[0,DVin/1e-3], 'k--', linewidth=lw)
+#plt.plot([0,tmax/1e-6],[Voutfin/1e-3,Voutfin/1e-3], 'k--', linewidth=lw)
+plt.plot(tsim/1e-6,DVinsim/1e-3,'b-', label='Input')
+plt.plot(tsim/1e-6,DVoutsim/1e-3,'r-', label='Output (Sim.)')
+plt.xlim(tmin/1e-6,tmax/1e-6)
+#plt.xticks(np.arange(0,10.1,0.2))
+plt.xlabel('Time [$\\mu s$]')
+plt.ylim(0,14)
+plt.ylabel('$\\Delta V_{in}$, $\\Delta V_{out}$ [mV]')
+plt.legend(loc='lower right')
+#plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+textstr = '\n'.join((
+  f'$V_{{in,q}} =$ {Vinq:.3f} V',
+  f'$V_{{outq}} =$ {Voutqsim:.3f} V'))
+plt.text(0.65, 0.95, textstr, ha='left', va='top', size=textFontSize, transform=plt.gca().transAxes,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+if savePlots: saveFigures(savePlotPath, otaName + '_step_response_small_sim')
+plt.show()
+```
+
+Of course adding a compensation capacitance $C_c$ as large as the load capacitance comes at a high area cost (doubling the area considering that $C_c = C_L$).
+
+## Voltage compliance
+
+```{python}
+# Sizing of current mirror M3a-M3b
+IC3=10
+ID3=Ib2
+Ispec3= ID3/IC3
+WoverL3=Ispec3/Ispecsqn
+L3=1e-6
+Leff3=L3+DLn
+Weff3=WoverL3*Leff3
+W3=Weff3-DWn
+
+# Sizing of current mirror M4a-M4b
+IC4=10
+ID4=Ib1
+Ispec4=ID4/IC4
+WoverL4=Ispec4/Ispecsqp
+L4=1e-6
+Leff4=L4+DLp
+Weff4=WoverL4*Leff4
+W4=Weff4-DWp
+
+# Min and max input voltages
+VGS1=ekv_df.at["M1","VG-VT0"]+VT0n
+Vimin=VGS1
+VDSsat1=ekv_df.at["M1","VDSsat"]
+VBG2=ekv_df.at["M2","VG-VT0"]+VT0p
+Vimax=VGS1-VDSsat1-VBG2+VDD
+DVin=Vimax-Vimin
+```
+
+![Schematic used for the DC simulation.](Figures/ssf_dc_sweep_sim){width=50% #fig-ssf_dc_sweep_sim}
+
+For checking the input-output voltage compliance, we use the schematic shown in @fig-ssf_dc_sweep_sim where we have replaced the ideal current sources by current mirrors M~3a~-M~3b~ and M~4a~-M~4b~. In order to simulate the circuit of @fig-ssf_dc_sweep_sim, we need to size the current mirrors. We choose to bias them at the onset of strong inversion setting their inversion coefficient to $IC_3 = IC_4 =$ `{python} f'{IC3:.0f}'`. For $L_3 =$ `{python} f'{L3/1e-6:.2f}'` $\mu m$, we get $W_3 =$ `{python} f'{W3/1e-6:.2f}'` $\mu m$ and for $L_4 =$ `{python} f'{L4/1e-6:.2f}'` $\mu m$, we get $W_4 =$ `{python} f'{W4/1e-6:.2f}'` $\mu m$.
+
+The minimum input voltage is defined as the voltage for which the output voltage gets equal to zero. It is approximately given by $V_{in,min} \cong V_{GS1} \cong$ `{python} f'{Vimin:.3f}'` $V$ and the maximum input voltage is equal to $V_{in,max} \cong V_{GS1} - V_{DSsat1} + V_{BG2} + V_{DD} \cong$ `{python} f'{Vimax:.3f}'` $V$. The SSF can therefore operate with an input voltage ranging between `{python} f'{Vimin:.3f}'` $V$ and `{python} f'{Vimax:.3f}'` $V$, corresponding to a wide input voltage range of about `{python} f'{DVin:.3f}'` $V$.
+
+This can be verified by simulating the large-signal input-output characteristic which is plotted in @fig-ssf_dc_sweep and favorably compared to the theoretical estimation.
+
+```{python}
+#| label: fig-ssf_dc_sweep
+#| fig-cap: Simulated large-signal input-output characteristic.
+
+circuitName = "ssf"
+simtype = ".dc"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+Vinmin=0
+Vinmax=1.8
+Npts=1001
+dVin=(Vinmax-Vinmin)/(Npts-1)
+
+if newSim:
+  paramstr = '\n'.join((
+    f'.param VDD={VDD:.1f} Vinq={Vinq:.3f} Ib1={Ib1/1e-6:.3f}u Ib2={Ib2/1e-6:.3f}u',
+    f'.param CL={CL/1e-12:.3f}p Cc={Cc/1e-12:.3f}p',
+    f'.param W1={W1/1e-6:.2f}u L1={L1/1e-6:.2f}u AD={AD1:.2e} PD={PD1:.2e}',
+    f'.param W2={W2/1e-6:.2f}u L2={L2/1e-6:.2f}u AD={AD2:.2e} PD={PD2:.2e}',
+    f'.param W3={W3/1e-6:.2f}u L3={L3/1e-6:.2f}u',
+    f'.param W4={W4/1e-6:.2f}u L4={L4/1e-6:.2f}u'
+  ))
+  # Write the transistors sizes and bias to the ngspice directory
+  with open(simulationPath+'size_bias3.par', 'w') as f:
+    f.write(paramstr)
+  # Write the transistors sizes and bias to the qucs-s directory
+  with open(qucsPath+'size_bias3.par', 'w') as f:
+    f.write(paramstr)
+  simpar = '\n'.join((
+    f'.csparam Vinmin={Vinmin:.3e}',
+    f'.csparam Vinmax={Vinmax:.3e}',
+    f'.csparam dVin={dVin:.3e}'
+  ))
+  simparFile = simulationPath + "ssf.dc.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+
+Vinsim=df_sim['v-sweep'].to_numpy()
+Voutsim=df_sim['Vout'].to_numpy()
+
+Vinthe=Vinsim
+Voutthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  if Vinthe[k]<=Vimin:
+    Voutthe[k]=0
+  else:
+    if Vinthe[k]>=Vimax:
+      Voutthe[k]=Vimax-Vimin
+    else:
+      Voutthe[k]=Vinthe[k]-Vimin
+
+plt.plot(Vinsim, Voutsim, 'r-', label='Simulation')
+plt.plot(Vinthe, Voutthe, 'b--', label='Theory')
+plt.xlim(Vinmin,Vinmax)
+plt.xticks(np.arange(0,2,0.2))
+plt.xlabel('$V_{in}$ [$V$]')
+plt.ylim(0,1.4)
+#plt.yticks(np.arange(0.6,1.5,0.1))
+plt.ylabel('$V_{out}$ [V]')
+plt.legend(loc='upper left')
+#textstr = '\n'.join((
+#  f'$V_{{DD}} =$ {VDD:.1f} V',
+#  f'$V_{{ic}} =$ {Vic:.1f} V',
+#  f'$V_{{out0}} =$ {Voutq0:.3f} V',
+#  f'$V_{{outq}} =$ {Voutq:.3f} V',
+#  f'$V_{{os}} =$ {Vos/1e-6:.3f} $\\mu\\,V$',
+#  f'$V_{{outmax}} \\cong$ {Voutmax:.3f} V',
+#  f'$V_{{outmin}} \\cong$ {Voutmin:.3f} V',
+#  f'$V_{{swing}} \\cong$ {Vswing:.2f} V'))
+#plt.text(1.05, 0.5, textstr, ha='left', va='center', size=textFontSize, transform=plt.gca().transAxes,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+if savePlots: saveFigures(savePlotPath, otaName + '_transfer_characteristic_sim')
+plt.show()
+```
+
+## Summary
+The SSF uses a common-source stage in a feedback loop to reduce its output resistance by a factor equal to the self-gain of a transistor compared to that of the SVF. The bandwidth is increased by the same order of magnitude. However, the transfer function can show some peaking, which is undesireable for having an acceptable step response. The circuit can be compensated by adding a compensation capacitor of the same order of magnitude than the load capacitance to increase the phase margin of the open-loop transfer function and hence reduce the peaking in the closed-loop transfer function and get an acceptable step response. Adding this compensation capacitance reduces the bandwidth to about the same value obtained for the SVF, but at the cost of a higher current consumption (about double) compared to the SVF. As a conclusion, the main advantage of the SSF compared to the SVF is its very low output resistance but it doesn't really increase the bandwidth if the circuit is compensated with a compensation capacitance of the same order of magnitude than the load capacitance.
+
+::: {.callout-note}
+Note that the fact that the SSF features a 2^nd^-order transfer function has been used to build power-efficient CMOS continuous-time filters @bib:damico:isscc:2008 @bib:dematteis:jssc:50:7:july:2015 @bib:dematteis:tcas2:64:8:aug:2017 @bib:dematteis:tacs2:68:9:sept:2021
+:::
+
+# The flipped voltage follower (FVF)
+The main drawback of the SSF is the current consumption which is about twice that of the SVF to achieve the same bandwidth assuming that the circuit is compensated. We can actually reduce the current consumption by flipping the pMOS common-source (CS) stage into a nMOS CS which can fit below the voltage follower and share the same bias current. This results in the schematic of the *flipped voltage follower* (FVF) shown in @fig-fvf_schematic @bib:carvajal:tcas1:52:7:july:2005 @bib:ramirez:mwcas:2005 @bib:ali:sscm:part2:2023. It is called *flipped* because the pMOS CS of the SSF has been flipped into an nMOS CS (some say that the origin of *flipped* comes from flipping the current source of the SVF and moving it to the top @bib:ali:sscm:part2:2023).
+
+![Schematic of the FVF.](Figures/fvf_schematic){width=25% #fig-fvf_schematic}
+
+Similarly to the SSF, the FVF also features a feedback loop to reduce its output resistance. The feedback loop operates as follows: if the output voltage increases keeping a constant input voltage, the drain current of M~1~ decreases and the drain voltage of M~1~ and gate voltage of M~2~ increases. Since the gate voltage of M~2~ increases its drain voltage now decreases bringing the output voltage back to its quiescent value. In other words, the FVF tries to keep the output voltage constant resulting in an output resistance that is significantly reduced compared to the SVF. We will analyze this in more details below. But before we proceed with the small-signal analysis, we need to have some large-signal considerations.
+
+## Large-signal considerations {#sec-ssf_large_signal}
+The fact that the $V_{GS}$ voltage of M~2~ is equal to the sum of the $V_{DS}$ voltages of M~1~ and M~2~ is seriously limiting the input voltage compliance. The lower limit of the input voltage corresponds to a zero output voltage and is therefore given by $V_{GS1}$. If we assume that M~1~ is biased in moderate inversion then $V_{GS1} \cong V_{T0n}$ so the $V_{in,min} \cong V_{T0}$. This lower limit is similar to that of the SFV.
+
+The maximum input voltage is set by transistor M~1~ getting into the linear region with $V_{DS}$ close to zero and hence $V_{in,max} \cong V_{GS1} + V_{GS2}$. If M~1~ and M~2~ are biased in weak or moderate inversion, $V_{in,max} \cong 2\,V_{T0}$.
+
+```{python}
+Vinmax=2*VT0n
+Vinmin=VT0n
+DeltaVin=Vinmax-Vinmin
+```
+
+The input voltage swing is therefore $\Delta V_{in} = V_{in,max} - V_{in,min} \cong V_{T0n}$ which is about one threshold voltage. For the 180 nm technology with $V_{T0n} =$ `{python} f'{VT0n:.3f}'`, we get $V_{in,max} =$ `{python} f'{Vinmax:.3f}'` $V$, $V_{in,min} =$ `{python} f'{Vinmin:.3f}'` $V$. This leads to a very limited input voltage swing $\Delta V_{in} =$ `{python} f'{DeltaVin:.3f}'` $V$.
+
+## Small-signal analysis
+
+![Small-signal schematic of the FVF including the parasitic capacitances $C_{p1}$ and $C_{p2}$.](Figures/fvf_small-signal2){width=60% #fig-fvf_gain}
+
+The small-signal schematic of the FVF of @fig-fvf_schematic is shown in @fig-fvf_gain where we have included the parasitic capacitances. Without surprise, we realize that the small-signal schematic of the FVF shown in @fig-fvf_gain is identical to that of the SSF shown in @fig-ssf_gain. This means that all the small-signal derivations we have performed for the SSF are also valid for the FVF. The FVF therefore also shows a 2^nd^-order transfer function given by \eqref{eqn:ssf:tf1} with the parameters given by \eqref{eqn:ssf:adc}, \eqref{eqn:ssf:wz}, \eqref{eqn:ssf:w0} and \eqref{eqn:ssf:q}. We can check this by designing the FVF for the same specifications @tbl-fvf_specs and with the same bias current $I_b$ as used for the SVF.
+
+```{python}
+#| label: tbl-fvf_specs
+#| tbl-cap: FVF specifications.
+
+BWspec=1e6
+wc=2*pi*BWspec
+CL=10e-12
+
+table = [["Minimum bandwidth","$BW$",f'{BWspec/1e6:.0f}',"$MHz$"],
+         ["Load capacitance","$C_L$",f'{CL/1e-12:.0f}',"$pF$"]
+         ]
+
+Markdown(tabulate(
+  table,
+  headers=["Specification","Symbol","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("left","center","center","center")
+))
+```
+
+```{python}
+# Sizing of M1
+IC1=1
+Gm1=Ib/(n0n*UT)*gmsid_ic(IC1)
+Ispec1=Ib/IC1
+WoverL1=Ispec1/Ispecsqn
+L1=1e-6
+Leff1=L1+DLn
+Weff1=WoverL1*Leff1
+W1=Weff1-DWn
+AD1=2*Hdif*Weff1
+PD1=2*(2*Hdif+Weff1)
+
+# Sizing of M2
+IC2=IC1
+Gm2=Ib/(n0n*UT)*gmsid_ic(IC2)
+Ispec2=Ib/IC2
+WoverL2=Ispec2/Ispecsqn
+L2=L1
+Leff2=L2+DLn
+Weff2=WoverL2*Leff2
+W2=Weff2-DWn
+AD2=2*Hdif*Weff2
+PD2=2*(2*Hdif+Weff2)
+
+Vinq=0.78
+```
+
+To save voltage, we choose to bias M~1~ and M~2~ in moderate inversion with $IC_1 = IC_2 =$ `{python} f'{IC1:.0f}'`. For the chosen bias current $I_b =$ `{python} f'{Ib/1e-6:.3f}'` $\mu A$ and inversion coefficient $IC_1 =$ `{python} f'{IC1:.0f}'`, we get a transconductance $G_{m1} =$ `{python} f'{Gm1/1e-6:.3f}'` $\mu A/V$. The specific current and $W/L$ are then equal to $I_{spec1} =$ `{python} f'{Ispec1/1e-6:.3f}'` $\mu A$ and $(W/L)_1 =$ `{python} f'{WoverL1:.3f}'`. We choose a long-channel transistor for M~1~ with $L_1 =$ `{python} f'{L1/1e-6:.2f}'` $\mu m$, we get the width $W_1 =$ `{python} f'{W1/1e-6:.2f}'` $\mu m$.
+
+Since M~2~ shares the same bias current and has the same inversion coefficient than M~1~, it has the same transconductance $G_{m2} =$ `{python} f'{Gm2/1e-6:.3f}'` $\mu A/V$, specific current $I_{spec2} =$ `{python} f'{Ispec2/1e-6:.3f}'` $\mu A$ and $(W/L)_2 =$ `{python} f'{WoverL2:.3f}'`. Choosing the same length $L_2 = L_1 =$ `{python} f'{L2/1e-6:.2f}'` $\mu m$, we get the same width $W_2 =$ `{python} f'{W2/1e-6:.2f}'` $\mu m$. M~2~ is hence identical to M~1~. Note that M~1~ and M~2~ of the FVF are also identical to M~1~ of the SVF.
+
+The transistor sizing result is summarized in @tbl-fvf_nocp_transistor_info1, while the small-signal parameters are given in @tbl-fvf_nocp_transistor_info2.
+
+```{python}
+#| label: tbl-fvf_nocp_transistor_info1
+#| tbl-cap: Transistor size and bias information.
+
+transistor_info={
+    "Type": ["n","n"],
+    "Function": ["CS","VF"],
+    "W": [W1,W2],
+    "L": [L1,L2],
+    "ID": [Ib,Ib]
+}
+transistor_list=["M1","M2"]
+ekv_df=pd.DataFrame(transistor_info, index=transistor_list)
+
+ekv_df["Weff"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W"]+DWn,
+                                     ekv_df["W"]+DWp)
+ekv_df["Leff"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["L"]+DLn,
+                                     ekv_df["L"]+DLp)
+ekv_df["W/L"]=ekv_df["Weff"]/ekv_df["Leff"]
+ekv_df["Ispec"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W/L"]*Ispecsqn,
+                                     ekv_df["W/L"]*Ispecsqp)
+ekv_df["IC"]=ekv_df["ID"]/ekv_df["Ispec"]
+ekv_df["VP-VS"]=UT*vps_ic(ekv_df["IC"])
+ekv_df["n"]=np.where(ekv_df["Type"]=="n",
+                                     n0n,
+                                     n0p)
+ekv_df["VG-VT0"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["VP-VS"]/n0n,
+                                     ekv_df["VP-VS"]/n0p)
+ekv_df["VDSsat"]=UT*vdssat_ic(ekv_df["IC"])
+ekv_df["Gspec"]=ekv_df["Ispec"]/UT
+ekv_df["Gms"]=ekv_df["Gspec"]*gms_ic(ekv_df["IC"])
+ekv_df["Gm"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["Gms"]/n0n,
+                                     ekv_df["Gms"]/n0p)
+ekv_df["Gds"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["ID"]/(lambdan*ekv_df["L"]),
+                                     ekv_df["ID"]/(lambdap*ekv_df["L"]))
+ekv_df["gamman"]=np.where(ekv_df["Type"]=="n",
+                                     gamman_ic(ekv_df["IC"],n0n),
+                                     gamman_ic(ekv_df["IC"],n0p))
+ekv_df["COX"]=Cox*ekv_df["W"]*ekv_df["L"]
+ekv_df["CGSi"]=ekv_df["COX"]*cgsi_ic(ekv_df["IC"])
+ekv_df["CGDi"]=0
+ekv_df["CGBi"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["COX"]*cgbi_ic(ekv_df["IC"],n0n),
+                                     ekv_df["COX"]*cgbi_ic(ekv_df["IC"],n0p))
+ekv_df["CBSi"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["COX"]*cbsi_ic(ekv_df["IC"],n0n),
+                                     ekv_df["COX"]*cbsi_ic(ekv_df["IC"],n0p))
+ekv_df["CBDi"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["CGDi"]*(n0n-1),
+                                     ekv_df["CGDi"]*(n0p-1))
+ekv_df["CGSe"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W"]*CGSOn,
+                                     ekv_df["W"]*CGSOp)
+ekv_df["CGDe"]=np.where(ekv_df["Type"]=="n",
+                                     ekv_df["W"]*CGDOn,
+                                     ekv_df["W"]*CGDOp)
+ekv_df["CGBe"]=np.where(ekv_df["Type"]=="n",
+                                    ekv_df["W"]*CGBOn,
+                                    ekv_df["W"]*CGBOp)
+ekv_df["CBSe"]=np.where(ekv_df["Type"]=="n",
+                                    ekv_df["W"]*ekv_df["L"]*CJn+2*(ekv_df["W"]+ekv_df["L"])*CJSWn,
+                                    ekv_df["W"]*ekv_df["L"]*CJp+2*(ekv_df["W"]+ekv_df["L"])*CJSWp)
+ekv_df["CBDe"]=np.where(ekv_df["Type"]=="n",
+                                    ekv_df["W"]*ekv_df["L"]*CJn+2*(ekv_df["W"]+ekv_df["L"])*CJSWn,
+                                    ekv_df["W"]*ekv_df["L"]*CJp+2*(ekv_df["W"]+ekv_df["L"])*CJSWp)
+ekv_df["CGS"]=ekv_df["CGSi"]+ekv_df["CGSe"]
+ekv_df["CGD"]=ekv_df["CGDi"]+ekv_df["CGDe"]
+ekv_df["CGB"]=ekv_df["CGBi"]+ekv_df["CGBe"]
+ekv_df["CBS"]=ekv_df["CBSi"]+ekv_df["CBSe"]
+ekv_df["CBD"]=ekv_df["CBDi"]+ekv_df["CBDe"]
+pd.set_option('display.float_format', '{:.2E}'.format)
+ekv_df
+
+# Generate the table from dataframe
+feature_list=["W","L","ID","Ispec","IC","VG-VT0","VDSsat"]
+Nmos=len(transistor_list)
+Nfeature=len(feature_list)
+table=[]
+for mos in transistor_list:
+  row=[mos]
+  for feature in feature_list:
+    row.append(ekv_df.at[mos,feature])
+  table.append(row)
+
+# Scale data for proper units
+for i in range(Nmos):
+#  for j in [3,4]:
+#    table[i][j]=table[i][j]/1e-9
+  for j in [1,2,3,4]:
+    table[i][j]=table[i][j]/1e-6
+  for j in [6,7]:
+    table[i][j]=table[i][j]/1e-3
+
+Markdown(tabulate(
+  table,
+  headers=["Transistor","$W\\;[\\mu m]$","$L\\;[\\mu m]$","$I_D\\;[\\mu A]$","$I_{{spec}}\\;[\\mu A]$","$IC$","$V_G-V_{{T0}}\\;[mV]$","$V_{{DSsat}}\\;[mV]$"],
+  numalign="center",
+  stralign="center",
+  colalign=("center","center","center","center","center","center","center","center"),
+  floatfmt=(".3f",".2f",".2f",".3f",".3f",".1f",".0f",".0f")
+))
+```
+
+```{python}
+#| label: tbl-fvf_nocp_transistor_info2
+#| tbl-cap: Transistor small-signal and thermal noise parameters.
+
+# Generate the table from dataframe
+feature_list=["Gspec","Gms","Gm","Gds","gamman"]
+Nmos=len(transistor_list)
+Nfeature=len(feature_list)
+table=[]
+for mos in transistor_list:
+  row=[mos]
+  for feature in feature_list:
+    row.append(ekv_df.at[mos,feature])
+  table.append(row)
+
+# Scale data for proper units
+for i in range(Nmos):
+  for j in [1,2,3]:
+    table[i][j]=table[i][j]/1e-6
+  for j in [4]:
+    table[i][j]=table[i][j]/1e-9
+
+Markdown(tabulate(
+  table,
+  headers=["Transistor","$G_{{spec}}\\;[\\mu A/V]$","$G_{{ms}}\\;[\\mu A/V]$","$G_m\\;[\\mu A/V]$","$G_{{ds}}\\;[nA/V]$","$\\gamma_n$"],
+  numalign="center",
+  stralign="center",
+  colalign=("center","center","center","center","center","center"),
+  floatfmt=(".3f",".3f",".3f",".3f",".3f",".3f")
+))
+```
+
+![Schematic of the FVF used for simulation.](Figures/fvf_sim){width=35% #fig-fvf_sim}
+
+We now will simulate the circuit shown in @fig-fvf_sim. We have chosen the input bias voltage $V_{inq} =$ `{python} f'{Vinq:.2f}'` $V$ so that M~1~ and M~2~ have about the same $V_{DS}$ voltage. The operating voltages are given in @tbl-fvf_nocp_voltages1.
+
+```{python}
+#| label: tbl-fvf_nocp_voltages1
+#| tbl-cap: FVF node voltages.
+
+circuitName="fvf"
+simtype = ".op"
+fileName = circuitName + simtype
+simulationPath = "./Simulations/FVF/ngspice/"
+qucsPath = "./Simulations/FVF/qucs-s/"
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationVoltages = simulationPath + fileName + ".ic"
+simulationData = simulationPath + fileName + ".dat"
+
+if newSim:
+  paramstr = '\n'.join((
+    f'.param VDD={VDD:.1f} Vinq={Vinq:.3f} Ib={Ib/1e-6:.3f}u',
+    f'.param CL={CL/1e-12:.3f}p',
+    f'.param W1={W1/1e-6:.2f}u L1={L1/1e-6:.2f}u',
+    f'.param W2={W2/1e-6:.2f}u L2={L2/1e-6:.2f}u'
+  ))
+  # Write the transistors sizes and bias to the ngspice directory
+  with open(simulationPath+'size_bias.par', 'w') as f:
+    f.write(paramstr)
+  # Write the transistors sizes and bias to the qucs-s directory
+  with open(qucsPath+'size_bias.par', 'w') as f:
+    f.write(paramstr)
+  #print('Starting ngspice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+nodeList=["vdd","in","out","1"]
+v_df=pd.DataFrame(index=nodeList)
+Nnodes=len(nodeList)
+for k in range(0,Nnodes):
+  nodeName=nodeList[k]
+  regexp = re.compile(r'v\(' + nodeName + r'\)' + refloat)
+  with open(simulationVoltages) as f:
+    for line in f:
+      match = re.search(regexp, line)
+      if match:
+        v_df.at[nodeName, 'Voltage']=float(match.group(1))
+
+Voutq=v_df.loc['out','Voltage']
+
+Markdown( 
+  tabulate(v_df,
+  showindex=True,
+  headers=["Node","Voltage"],
+  numalign="center",
+  stralign="center",
+  colalign=("center","center")
+))
+```
+
+The operating point looks fine. We can now proceed with the simulation of the voltage gain with an AC simulation. The result is shown in @fig-fvf_svf_tf.
+
+```{python}
+#| label: fig-fvf_svf_tf
+#| fig-cap: Simulated gain response compared to theoretical estimation.
+
+def Av1(s,Adc,wc):
+  num=Adc
+  den=(1+s/wc)
+  return num/den
+
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+fmin=1e5
+fmax=1e9
+Ndec=201
+
+if newSim:
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "fvf.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+AvmagdBsim=df_sim['AmagdB'].to_numpy()
+Avphidegsim=df_sim['Aphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+fmax=fsim[Npts-1]
+
+df_sim=pd.read_table("./Simulations/SVF/ngspice/svf.ac.dat", sep=' +', engine='python')
+fsvf=df_sim['frequency'].to_numpy()
+AvmagdBsvf=df_sim['AmagdB'].to_numpy()
+Avphidegsvf=df_sim['Aphdeg'].to_numpy()
+
+regexp = re.compile(r'adc' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      AdcdBsim=float(match.group(1))
+
+AdcdBsim=AvmagdBsim[0]
+Adcsim=pow(10,AdcdBsim/20)
+
+fthe=fsim
+
+Gm1=ekv_df.at["M1","Gm"]
+Gds1=ekv_df.at["M1","Gds"]
+Gm2=ekv_df.at["M2","Gm"]
+A1=Gm1/Gds1
+Adcthe=1/(1+1/A1)
+AdcdBthe=20*log(abs(Adcthe))
+wcthe=Gm2/CL*(A1+1)
+fcthe=wcthe/(2*pi)
+
+AvmagdBthe=np.zeros(Npts)
+Avphidegthe=np.zeros(Npts)
+AvmagdBthe2=np.zeros(Npts)
+Avphidegthe2=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  AvmagdBthe[k]=20*log(abs(Av1(jw,Adcthe,wcthe)))
+  Avphidegthe[k]=np.angle(Av1(jw,Adcthe,wcthe),deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+axs[0].semilogx([fmin,fmax],[-3,-3],'k--', linewidth=lw)
+axs[0].semilogx(fsim,AvmagdBsim,'r-', markersize=3, markevery=10, label='FVF')
+axs[0].semilogx(fsvf,AvmagdBsvf,'r--',label='SVF')
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(-80,20))
+axs[0].set(ylabel='$|A_v|$ [dB]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='lower left')
+#textstr1 = '\n'.join((
+#  f'$A_{{dc}} =$ {AdcdBthe:.1f} dB (theory)',
+#  f'$A_{{dc}} =$ {AdcdBsim:.1f} dB (sim)',
+#  f'$f_c =$ {fcthe/1e6:.1f} MHz (theory)'))
+#axs[0].text(0.05, 0.5, textstr1, ha='left', va='center', transform=axs[0].transAxes, size=textFontSize,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim,Avphidegsim,'b-', markersize=3, markevery=10, label='FVF')
+axs[1].semilogx(fsvf,Avphidegsvf,'b--',label='SVF')
+#axs[1].semilogx(fthe,Avphidegthe2,'b--',label='Theory (with adjusted $C_F$)')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-180,0))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_v\\}$ [degree]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-180,-135,-90,-45,0])
+axs[1].legend(loc='lower left')
+textstr2 = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.05, 0.5, textstr2, ha='left', va='center', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+@fig-fvf_svf_tf shows a similar behavior than the SSF shown in @fig-ssf_svf_tf confirming the 2^nd^-order transfer function. To compute the theoretical transfer function \eqref{eqn:ssf:tf1}, we need to estimate the parasitic capacitances $C_{p1}$ and $C_{p2}$. It turns out that $C_{p1}$ and $C_{p2}$ are identical to the one calculated for the SSF. $C_{p1}$ is given by \eqref{eqn:ssf:cp1} and $C_{p2}$ is given by \eqref{eqn:ssf:cp2}. Of course the value of all the parasitic capacitances associated to M~2~are slightly different because M~2~ in the SSF is a pMOS transistor.
+
+We can now compute all the small-signal parameters in order to compute the theoretical transfer function given by \eqref{eqn:ssf:tf1}. They are presented in @tbl-fvf_small_signal_parameters1.
+
+```{python}
+#| label: tbl-fvf_small_signal_parameters1
+#| tbl-cap: Estimation of the small-signal parameters.
+
+Gm1=ekv_df.at["M1","Gm"]
+Gds1=ekv_df.at["M1","Gds"]
+CBD1=ekv_df.at["M1","CBD"]
+CGD1=ekv_df.at["M1","CGD"]
+CGB1=ekv_df.at["M1","CGB"]
+
+Gm2=ekv_df.at["M2","Gm"]
+Gds2=ekv_df.at["M2","Gds"]
+CGS2=ekv_df.at["M2","CGS"]
+CGB2=ekv_df.at["M2","CGB"]
+CGD2=ekv_df.at["M2","CGD"]
+
+Cp1=CBD1+CGD2
+Cp2=CGD1+CGS2+CGB2
+
+Adc=1
+AdcdB=20*log(Adc)
+wz=Gm2/Cp2
+fz=wz/(2*pi)
+w0=sqrt(Gm1*Gm2/(CL*(Cp1+Cp2)))
+f0=w0/(2*pi)
+Q=sqrt(CL*(Cp1+Cp2)*Gm1*Gm2)/(CL*Gds1+Cp2*Gm1+Cp1*Gm2)
+
+
+table = [["$G_{{m1}}$",f'{Gm1/1e-6:.3f}',"$\\mu A/V$"],
+         ["$G_{{m2}}$",f'{Gm2/1e-6:.3f}',"$\\mu A/V$"],
+         ["$G_{{ds1}}$",f'{Gds1/1e-9:.3f}',"$nA/V$"],
+         ["$G_{{ds2}}$",f'{Gds2/1e-9:.3f}',"$nA/V$"],
+         ["$G_{{m1}}/G_{{ds1}}$",f'{A1:.3f}',"-"],
+         ["$G_{{m1}}/G_{{ds1}}$",f'{20*log(abs(A1)):.3f}',"dB"],
+         ["$G_{{m2}}/G_{{ds2}}$",f'{A2:.3f}',"-"],
+         ["$G_{{m2}}/G_{{ds2}}$",f'{20*log(abs(A2)):.3f}',"dB"],
+         ["$C_{{p1}}$",f'{Cp1/1e-15:.3f}',"$fF$"],
+         ["$C_{{p2}}$",f'{Cp2/1e-15:.3f}',"$fF$"],
+         ["$A_{{dc}}$",f'{Adc:.3f}',"-"],
+         ["$A_{{dc}}$",f'{AdcdB:.3f}',"dB"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_0$",f'{f0/1e6:.3f}',"$MHz$"],
+         ["$Q$",f'{Q:.3f}',"-"],
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+We see that the resonance frequency is now $f_0 =$ `{python} f'{f0/1e6:.3f}'` $MHz$ and the quality factor is $Q =$ `{python} f'{Q:.3f}'`, which is indeed larger than one explaining the peaking. We can now compare the simulated transfer function to \eqref{eqn:ssf:tf1} calculated with the small-signal parameters given in @tbl-fvf_small_signal_parameters1. The result is shown in @fig-fvf_tf1.
+
+```{python}
+#| label: fig-fvf_tf1
+#| fig-cap: Simulated gain response compared to theoretical estimation.
+
+def Avfvf1(s,Adc,wz,w0,Q):
+  num=Adc*(s/wz+1)
+  den=((s/w0)**2+s/(w0*Q)+1)
+  return num/den
+
+def Avfvf2(s,Adc,w0,Q):
+  num=Adc
+  den=((s/w0)**2+s/(w0*Q)+1)
+  return num/den
+
+Npts=len(fsim)
+fthe=fsim
+AvmagdBthe=np.zeros(Npts)
+Avphidegthe=np.zeros(Npts)
+AvmagdBthe2=np.zeros(Npts)
+Avphidegthe2=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  AvmagdBthe[k]=20*log(abs(Avfvf1(jw,Adc,wz,w0,Q)))
+  Avphidegthe[k]=np.angle(Avfvf1(jw,Adc,wz,w0,Q),deg=True)
+  AvmagdBthe2[k]=20*log(abs(Avfvf2(jw,Adc,w0,Q)))
+  Avphidegthe2[k]=np.angle(Avfvf2(jw,Adc,w0,Q),deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+axs[0].semilogx(fsim,AvmagdBsim,'ro', markersize=3, markevery=10, label='simulation')
+axs[0].semilogx(fthe,AvmagdBthe2,'b--',label='without zero')
+axs[0].semilogx(fthe,AvmagdBthe,'b-',label='theory')
+
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(-80,20))
+axs[0].set(ylabel='$|A_v|$ [dB]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='lower left')
+textstr1 = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[0].text(0.75, 0.95, textstr1, ha='left', va='top', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim,Avphidegsim,'ro', markersize=3, markevery=10, label='simulation')
+axs[1].semilogx(fthe,Avphidegthe2,'b--',label='without zero')
+axs[1].semilogx(fthe,Avphidegthe,'b-',label='theory')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-180,0))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_v\\}$ [degree]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-180,-135,-90,-45,0])
+axs[1].legend(loc='lower left')
+#textstr2 = '\n'.join((
+#  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+#  f'$C_L =$ {CL/1e-12:.0f} pF'))
+#axs[1].text(0.05, 0.5, textstr2, ha='left', va='center', transform=axs[1].transAxes, size=textFontSize,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+We see that the theoretical transfer given by \eqref{eqn:ssf:tf1} matches the simulaton result bvery well. It even captures the peak close to the resonance frequency. From @tbl-fvf_small_signal_parameters1, we see that the zero frequency $f_z =$ `{python} f'{fz/1e6:.3f}'` MHz is way above the resonance frequency $f_0 =$ `{python} f'{f0/1e6:.3f}'` MHz and can therefore be neglected. This approximation with $\omega_z \rightarrow \infty$ is shown by the dashed lines in @fig-fvf_tf1.
+
+In many applications the peaking shown in @fig-fvf_tf1 is not acceptable. The step response will oscillate as shown in @fig-fvf_step and the settling time might be even longer than what is obtained by the SVF. We now will analyze the circuit using feedback theory.
+
+```{python}
+#| label: fig-fvf_step
+#| fig-cap: FVF step response.
+
+circuitName = "fvf"
+simtype = ".tran"
+fileName = circuitName + simtype
+simulationPath = "./Simulations/FVF/ngspice/"
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+simulationVoltages = simulationPath + circuitName + ".op.ic"
+
+tstart=0
+tstop=1e-6
+tstep=1e-9
+
+if newSim:
+  simpar = '\n'.join((
+    f'.csparam tsart={tstart:.3e}',
+    f'.csparam tstop={tstop:.3e}',
+    f'.csparam tstep={tstep:.3e}'
+  ))
+  simparFile = simulationPath + "fvf.tran.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+regexp = re.compile(r'v\(out\)' + refloat)
+with open(simulationVoltages) as f:
+  for line in f:
+    match = re.search(regexp, line)
+    if match:
+      Voutqsim=float(match.group(1))
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+
+tsim=df_sim['time'].to_numpy()
+Vinsim=df_sim['Vin'].to_numpy()
+Voutsim=df_sim['Vout'].to_numpy()
+DVinsim=Vinsim-Vinq
+DVoutsim=Voutsim-Voutqsim
+
+Npts=len(tsim)
+tmin=tsim[0]
+tmax=tsim[Npts-1]
+
+#plt.plot([td/1e-6,(td+1/(2*pi*GBWthe))/1e-6],[0,DVin/1e-3], 'k--', linewidth=lw)
+#plt.plot([0,tmax/1e-6],[Voutfin/1e-3,Voutfin/1e-3], 'k--', linewidth=lw)
+plt.plot(tsim/1e-6,DVinsim/1e-3,'b-', label='Input')
+plt.plot(tsim/1e-6,DVoutsim/1e-3,'r-', label='Output (Sim.)')
+plt.xlim(0,1)
+plt.xticks(np.arange(0,1.1,0.1))
+plt.xlabel('Time [$\\mu s$]')
+plt.ylim(0,14)
+plt.ylabel('$\\Delta V_{in}$, $\\Delta V_{out}$ [mV]')
+plt.legend(loc='lower right')
+#plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+textstr = '\n'.join((
+  f'$V_{{in,q}} =$ {Vinq:.3f} V',
+  f'$V_{{outq}} =$ {Voutqsim:.3f} V'))
+plt.text(0.65, 0.5, textstr, ha='left', va='center', size=textFontSize, transform=plt.gca().transAxes,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+if savePlots: saveFigures(savePlotPath, otaName + '_step_response_small_sim')
+plt.show()
+```
+
+## Feedback analysis
+We can conduct exactly the same feedback analysis for the FVF as what was done for the SSF since the small-signal circuits are identical. We then get the same foward and loop gain given by \eqref{eqn:ssf:af} with the parameters given by \eqref{eqn:af:adc}, \eqref{eqn:af:wz}, \eqref{eqn:af:wp1} and \eqref{eqn:af:wp2}. The parameters are calculated in @tbl-fvf_af_parameters.
+
+```{python}
+#| label: tbl-fvf_af_parameters
+#| tbl-cap: Estimation of the small-signal forward gain parameters.
+
+Afdc=Gm1/Gds1
+AfdcdB=20*log(abs(Afdc))
+wz=Gm2/Cp2
+fz=wz/(2*pi)
+wp1=Gm2/(CL+Gm2/Gds1*Cp1)
+fp1=wp1/(2*pi)
+wp2=Gds1/(Cp1+Cp2)*(1+Cp1/CL*Gm2/Gds1)
+fp2=wp2/(2*pi)
+wu=sqrt(Afdc*wp1*wp2)
+fu=wu/(2*pi)
+
+table = [["$A_{{f,dc}}$",f'{Afdc:.3f}',"-"],
+         ["$A_{{f,dc}}$",f'{AfdcdB:.3f}',"dB"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_{{p1}}$",f'{fp1/1e3:.3f}',"$kHz$"],
+         ["$f_{{p2}}$",f'{fp2/1e6:.3f}',"$MHz$"],
+         ["$f_u$",f'{fu/1e6:.3f}',"$MHz$"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+We see that the dominant and non-dominant poles are actually quite close to each other since the ratio $\omega_{p2}/\omega_{p1}$ is only about `{python} f'{wp2/wp1:.1f}'`. The forward gain is plotted versus frequency in @fig-fvf_af for the parameters given in @tbl-fvf_af_parameters.
+
+```{python}
+#| label: fig-fvf_af
+#| fig-cap: Theoretical forward gain (loop gain).
+
+def Af(s,Adc,wz,wp1,wp2):
+  num=Adc*(1+s/wz)
+  den=(1+s/wp1)*(1+s/wp2)
+  return num/den
+
+Npts=101
+logfmin=4
+logfmax=8
+fmin=pow(10,logfmin)
+fmax=pow(10,logfmax)
+fthe=np.logspace(logfmin,logfmax,Npts,endpoint=True,base=10.0)
+
+Afthe=np.zeros(Npts,dtype=complex)
+AfmagdBthe=np.zeros(Npts)
+Afphidegthe=np.zeros(Npts)
+Avthe=np.zeros(Npts,dtype=complex)
+AvmagdBthe=np.zeros(Npts)
+Avphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  Afthe[k]=Af(jw,Afdc,wz,wp1,wp2)
+  AfmagdBthe[k]=20*log(abs(Afthe[k]))
+  Afphidegthe[k]=np.angle(Afthe[k],deg=True)
+  Avthe[k]=Afthe[k]/(1+Afthe[k])
+  AvmagdBthe[k]=20*log(abs(Avthe[k]))
+  Avphidegthe[k]=np.angle(Avthe[k],deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+Afwp1=20*log(abs(Af(1j*wp1,Afdc,wz,wp1,wp2)))
+Afwp2=20*log(abs(Af(1j*wp2,Afdc,wz,wp1,wp2)))
+PM=180+np.angle(Af(1j*wu,Afdc,wz,wp1,wp2),deg=True)
+
+axs[0].semilogx([fp1,fp1],[-30,Afwp1], 'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp1],[Afwp1,Afwp1], 'k--', linewidth=lw)
+axs[0].semilogx([fp2,fp2],[-30,Afwp2], 'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp2],[Afwp2,Afwp2], 'k--', linewidth=lw)
+axs[0].semilogx([fu,fu],[-30,15], 'k--', linewidth=lw)
+axs[0].semilogx([1e4,fu],[0,0], 'k--', linewidth=lw)
+axs[0].semilogx(fthe,AfmagdBthe, 'r-', label='open-loop')
+axs[0].semilogx(fthe,AvmagdBthe, 'r--', label='closed-loop')
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(-30,50))
+axs[0].set_yticks(range(-30,60,10))
+axs[0].set(ylabel='$|A_f|$ [dB]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$A_{{dc,ol}} =$ {AfdcdB:.1f} dB',
+  f'$f_z =$ {fz/1e6:.0f} MHz',
+  f'$f_{{p1}} =$ {fp1/1e3:.0f} kHz',
+  f'$f_{{p2}} =$ {fp2/1e6:.3f} MHz',
+  f'$f_u =$ {fu/1e6:.1f} MHz',
+  f'$PM =$ {PM:.1f} $^{{\\circ}}$'))
+axs[0].text(0.03, 0.07, textstr1, ha='left', va='bottom', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fthe,Afphidegthe, 'b-', label='open-loop')
+axs[1].semilogx(fthe,Avphidegthe, 'b--', label='closed-loop')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-180,0))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_f\\}$ [degree]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-180,-135,-90,-45,0])
+#axs[1].legend(loc='lower left')
+textstr2 = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.05, 0.5, textstr2, ha='left', va='center', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+Similarly to the SSF, we observe that the $\omega_z$ is much higher than the unity gain frequency $\omega_u$ and that both $\omega_{p1}$ and $\omega_{p2}$ are smaller than the unity gain frequency. The unity gain frequency can therefore be approximated by
+\begin{equation}
+  \omega_u \cong \sqrt{|A_{dc,ol}|\,\omega_{p1}\,\omega_{p2}} \cong \sqrt{\frac{G_{m1}\,G_{m2}}{C_L\,(C_{p1}+C_{p2})}}.
+\end{equation}
+As shown in @fig-fvf_af, the unity gain frequency $\omega_u$ is actually a good estimation of the resonant frequency of the closed-loop transfer function. We also observe that the phase margin is very small $PM =$ `{python} f'{PM:.1f}'` $^{\circ}$ leading to a strong peaking at $\omega_0 \cong \omega_u$.
+
+The system can also be compensated by adding a compensation capacitor $C_c$ at the drain of M~1~. Assuming now that $C_c \gg C_{p2}$ we get \eqref{eqn:ssf:af:comp} with the parameters given by \eqref{ssf:af:adc:comp}, \eqref{ssf:af:wz:comp}, \eqref{ssf:af:wp1:comp} and \eqref{ssf:af:wp2:comp}. The parameters for the circuit with compensation capacitor $C_c$ at the drain of M~1~ are given in @tbl-fvf_af_parameters2. The open- and closed-loop transfer functions for these parameters are plotted in @fig-fvf_af2.
+
+```{python}
+#| label: tbl-fvf_af_parameters2
+#| tbl-cap: Estimation of the small-signal forward gain parameters with compensation capacitor $C_c$ at the drain of M~1~.
+
+Cc=CL
+Afdc=Gm1/Gds1
+AfdcdB=20*log(abs(Afdc))
+wz=Gm2/Cc
+fz=wz/(2*pi)
+wp1=Gm2/(CL+Cc*(1+Gds2/Gds1))
+fp1=wp1/(2*pi)
+wp2=Gds1/Cc+(Gds1+Gds2)/CL+Gm2*Cp1/(CL*Cc)
+fp2=wp2/(2*pi)
+wu=sqrt(Afdc*wp1*wp2)
+fu=wu/(2*pi)
+
+table = [["$C_L$",f'{CL/1e-12:.0f}',"$pF$"],
+         ["$C_c$",f'{Cc/1e-12:.3f}',"$pF$"],
+         ["$A_{{f,dc}}$",f'{Afdc:.3f}',"-"],
+         ["$A_{{f,dc}}$",f'{AfdcdB:.3f}',"dB"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_{{p1}}$",f'{fp1/1e3:.3f}',"$kHz$"],
+         ["$f_{{p2}}$",f'{fp2/1e3:.3f}',"$kHz$"],
+         ["$f_u$",f'{fu/1e6:.3f}',"$MHz$"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+
+```{python}
+#| label: fig-fvf_af2
+#| fig-cap: Theoretical forward gain (loop gain) and closed-loop gain with compensation capacitor $C_c$ at the drain of M~1~.
+
+def Af(s,Adc,wz,wp1,wp2):
+  num=Adc*(1+s/wz)
+  den=(1+s/wp1)*(1+s/wp2)
+  return num/den
+
+Npts=101
+logfmin=3
+logfmax=7
+fmin=pow(10,logfmin)
+fmax=pow(10,logfmax)
+fthe=np.logspace(logfmin,logfmax,Npts,endpoint=True,base=10.0)
+
+Afthe=np.zeros(Npts,dtype=complex)
+AfmagdBthe=np.zeros(Npts)
+Afphidegthe=np.zeros(Npts)
+Avthe=np.zeros(Npts,dtype=complex)
+AvmagdBthe=np.zeros(Npts)
+Avphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  Afthe[k]=Af(jw,Afdc,wz,wp1,wp2)
+  AfmagdBthe[k]=20*log(abs(Afthe[k]))
+  Afphidegthe[k]=np.angle(Afthe[k],deg=True)
+  Avthe[k]=Afthe[k]/(1+Afthe[k])
+  AvmagdBthe[k]=20*log(abs(Avthe[k]))
+  Avphidegthe[k]=np.angle(Avthe[k],deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+Afwp1=20*log(abs(Af(1j*wp1,Afdc,wz,wp1,wp2)))
+Afwp2=20*log(abs(Af(1j*wp2,Afdc,wz,wp1,wp2)))
+PM=180+np.angle(Af(1j*wu,Afdc,wz,wp1,wp2),deg=True)
+
+axs[0].semilogx([fp1,fp1],[-30,Afwp1], 'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp1],[Afwp1,Afwp1], 'k--', linewidth=lw)
+axs[0].semilogx([fp2,fp2],[-30,Afwp2], 'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp2],[Afwp2,Afwp2], 'k--', linewidth=lw)
+axs[0].semilogx([fu,fu],[-30,0], 'k--', linewidth=lw)
+axs[0].semilogx([fmin,fu],[0,0], 'k--', linewidth=lw)
+axs[0].semilogx(fthe,AfmagdBthe, 'r-', label='open-loop')
+axs[0].semilogx(fthe,AvmagdBthe, 'r--', label='closed-loop')
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(-30,50))
+axs[0].set_yticks(range(-30,60,10))
+axs[0].set(ylabel='$|A_f|$ [dB]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$A_{{dc,ol}} =$ {AfdcdB:.1f} dB',
+  f'$f_z =$ {fz/1e6:.0f} MHz',
+  f'$f_{{p1}} =$ {fp1/1e3:.0f} kHz',
+  f'$f_{{p2}} =$ {fp2/1e3:.1f} kHz',
+  f'$f_u =$ {fu/1e6:.1f} MHz',
+  f'$PM =$ {PM:.1f} $^{{\\circ}}$'))
+axs[0].text(0.05, 0.07, textstr1, ha='left', va='bottom', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fthe,Afphidegthe, 'b-', label='open-loop')
+axs[1].semilogx(fthe,Avphidegthe, 'b--', label='closed-loop')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-180,0))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_f\\}$ [degree]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-180,-135,-90,-45,0])
+#axs[1].legend(loc='lower left')
+textstr2 = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF',
+  f'$C_c =$ {Cc/1e-12:.0f} pF'))
+axs[1].text(0.05, 0.08, textstr2, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+The phase margin has now increased to $PM =$ `{python} f'{PM:.1f}'` $^{\circ}$ and the peaking has almost disappeared resulting in a much better step response. On the other hand the FVF bandwidth has now decreased to that of the SVF.
+
+The main reason to use the FVF is to take adavantage of its low output impedance. We will estimate the output impedance in the next section.
+
+## Output impedance
+The main reason to use the FVF instead of the SVF is the low output impedance of the FVF compared to the SVF @bib:surkanti:mwcas:2017. Since the small-signal circuit of the FVF is identical to that of the SSF, we can reuse the expression \eqref{eqn:ssf:zout1} found for the SSF, with the parameters given by \eqref{eqn:ssf:zout1:rout}, \eqref{eqn:ssf:zout1:wz}, \eqref{eqn:ssf:zout1:w0} and \eqref{eqn:ssf:zout1:q}. The parameters for calculating the output impedance for the current design are given in @tbl-fvf_gout_parameters1.
+
+```{python}
+#| label: tbl-fvf_gout_parameters1
+#| tbl-cap: Estimation of the small-signal parameters for calculating the output impedance assuming that $C_L \gg C_{p1}, C_{p2}$ and $G_{m1} \gg G_{ds1}$ and $G_{m2} \gg G_{ds2}$.
+
+Rout=Gds1/(Gm1*Gm2)
+Gm1Rout=Gm1*Rout
+wz=Gds1/(Cp1+Cp2)
+w0=sqrt(Gm1*Gm2/(CL*(Cp1+Cp2)))
+f0=w0/(2*pi)
+Q=sqrt(CL*(Cp1+Cp2)*Gm1*Gm2)/(CL*Gds1+Cp2*Gm1+Cp1*Gm2)
+
+table = [["$R_{{out}}$",f'{Rout:.3f}',"$\Omega$"],
+         ["$G_{{m1}}\\,R_{{out}}$",f'{Gm1Rout:.3e}',"-"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_0$",f'{f0/1e6:.3f}',"$MHz$"],
+         ["$Q$",f'{Q:.3f}',"-"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+From @tbl-fvf_gout_parameters1 we see that the output resistance $R_{out} = Z_{out}(0)$ is about `{python} f'{1/Gm1Rout:.0f}'`-times smaller than that of the SVF. We can compare the theoretical expression \eqref{eqn:ssf:zout1} to ngspice simulations. The resulting output impedance normalized to that of the SVF $G_{m1}\,Z_{out}$ is compared to simulation results in @fig-fvf_zout_sim.
+
+```{python}
+#| label: fig-fvf_zout_sim
+#| fig-cap: Simulated output impedance normalized to $1/G_{m1}$ and compared to the theoretical expression assuming that $C_L \gg C_{p1}, C_{p2}$.
+
+def Zout(s,Rout,wz,w0,Q):
+  num=Rout*(s/wz+1)
+  den=((s/w0)**2+s/(w0*Q)+1)
+  return num/den
+
+circuitName="fvfzout"
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+fmin=1e5
+fmax=1e9
+Ndec=201
+
+if newSim:
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "fvfzout.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+Youtmagsim=df_sim['Youtmag'].to_numpy()
+Youtphidegsim=df_sim['Youtphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+fmax=fsim[Npts-1]
+
+Zoutmagsim=1/Youtmagsim
+Zoutphidegsim=-Youtphidegsim
+
+fthe=fsim
+Zoutthe=np.zeros(Npts,dtype=complex)
+Zoutmagthe=np.zeros(Npts)
+Zoutphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  Zoutthe[k]=Zout(jw,Rout,wz,w0,Q)
+  Zoutmagthe[k]=abs(Zoutthe[k])
+  Zoutphidegthe[k]=np.angle(Zoutthe[k],deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+#axs[0].semilogx([fmin,fmax],[-3,-3],'k--', linewidth=lw)
+axs[0].loglog(fsim,Gm1*Zoutmagsim,'ro', markersize=3, markevery=6, label='simulation')
+axs[0].loglog(fthe,Gm1*Zoutmagthe,'b-',label='theory')
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(1e-3,1))
+axs[0].set(ylabel='$|G_{m1}\,Z_{out}|$ [-]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$R_{{out}} =$ {Rout:.2f} $\Omega$',
+  f'$G_{{m1}}\\,R_{{out}} =$ {Gm1Rout:.2e}',
+  f'$f_z =$ {fz/1e6:.1f} MHz',
+  f'$f_0 =$ {f0/1e6:.1f} MHz',
+  f'$Q =$ {Q:.1f}'))
+axs[0].text(0.05, 0.93, textstr1, ha='left', va='top', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim,Zoutphidegsim,'ro', markersize=3, markevery=6, label='simulation')
+axs[1].semilogx(fthe,Zoutphidegthe,'b-',label='theory')
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-90,90))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{G_{m1}\,Z_{out}\\}$ [deg]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-90,-45,0,45,90])
+axs[1].legend(loc='upper right')
+textstr2 = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.05, 0.07, textstr2, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+We see an almost perfect match between the theoretical expression and the simulation. @fig-fvf_zout_sim shows a very low output resistance at low frequency. However the impedance then increases and peaks to a value that gets close to that of the SVF at $f_0 =$ `{python} f'{f0/1e6:.3f}'` MHz, before decreasing.
+
+We have seen that to avoid the strong peaking in the closed-loop transfer function, we can add a compensation capacitor which lowers the dominant pole of the open-loop transfer function avoiding the peaking in the closed-loop transfer function. The drawback is that it significantly reduces the bandwidth, canceling the advantage of the FVF compared to the SVF for the same current consumption. How does the compensation capacitance affect the output impedance?
+
+Let's consider the case where the compensation capacitor $C_c$ is connected between the drain of M~1~ and ground. If we assume that $C_c$ is of the same order of magnitude than the load capacitance $C_L$ and that $C_L,C_c \gg C_{p1},C_{p2}$, we get the same expresion \eqref{eqn:ssf:zout1} with parameters given by \eqref{eqn:ssf:zout4:rout}, 
+\eqref{eqn:ssf:zout4:wz}, \eqref{eqn:ssf:zout4:w0} and \eqref{eqn:ssf:zout4:q}.
+
+```{python}
+#| label: tbl-fvf_gout_parameters3
+#| tbl-cap: Estimation of the small-signal parameters for calculating the output impedance with a compensating capacitance $C_c$ assuming that $C_L, C_c \gg C_{p1}, C_{p2}$ and $G_{m1} \gg G_{ds1}$ and $G_{m2} \gg G_{ds2}$.
+
+Cc=CL
+Rout=Gds1/(Gm1*Gm2)
+Gm1Rout=Gm1*Rout
+wz=Gds1/Cc
+fz=wz/(2*pi)
+w0=sqrt(Gm1*Gm2/(CL*Cc))
+f0=w0/(2*pi)
+Q=sqrt((CL/Cc*Gm1/Gm2))
+
+table = [["$R_{{out}}$",f'{Rout:.3f}',"$\Omega$"],
+         ["$G_{{m1}}\\,R_{{out}}$",f'{Gm1Rout:.3e}',"-"],
+         ["$f_z$",f'{fz/1e3:.3f}',"$kHz$"],
+         ["$f_0$",f'{f0/1e6:.3f}',"$MHz$"],
+         ["$Q$",f'{Q:.3f}',"-"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+
+```{python}
+#| label: fig-fvf_zout_sim3
+#| fig-cap: Simulated output impedance normalized to $1/G_{m1}$ and compared to the theoretical expression with a compensation capacitance $C_c = C_L$ and assuming that $C_L, C_c \gg C_{p1}, C_{p2}$ and $G_{m1} \gg G_{ds1}$ and $G_{m2} \gg G_{ds2}$.
+
+def Zout(s,Rout,wz,w0,Q):
+  num=Rout*(s/wz+1)
+  den=((s/w0)**2+s/(w0*Q)+1)
+  return num/den
+
+circuitName="fvfzout2"
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+fmin=1e3
+fmax=1e7
+Ndec=201
+
+if newSim:
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "fvfzout2.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+Youtmagsim=df_sim['Youtmag'].to_numpy()
+Youtphidegsim=df_sim['Youtphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+fmax=fsim[Npts-1]
+
+Zoutmagsim=1/Youtmagsim
+Zoutphidegsim=-Youtphidegsim
+
+fthe=fsim
+Zoutthe=np.zeros(Npts,dtype=complex)
+Zoutmagthe=np.zeros(Npts)
+Zoutphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  Zoutthe[k]=Zout(jw,Rout,wz,w0,Q)
+  Zoutmagthe[k]=abs(Zoutthe[k])
+  Zoutphidegthe[k]=np.angle(Zoutthe[k],deg=True)
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+axs[0].loglog(fsim,Gm1*Zoutmagsim,'ro', markersize=3, markevery=10, label='simulation')
+axs[0].loglog(fthe,Gm1*Zoutmagthe,'b-',label='theory')
+axs[0].loglog([fmin,fz],[Gm1Rout,Gm1Rout],'k--', linewidth=lw)
+axs[0].loglog([fz,f0],[Gm1Rout,1],'k--', linewidth=lw)
+axs[0].loglog([f0,fmax],[1,0.1],'k--', linewidth=lw)
+axs[0].loglog([fz,fz],[1e-3,Gm1Rout],'k--', linewidth=lw)
+axs[0].loglog([f0,f0],[1e-3,1],'k--', linewidth=lw)
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylim=(1e-3,10))
+axs[0].set(ylabel='$|G_{m1}\,Z_{out}|$ [-]')
+#axs[0].set_yticks([-25,-20,-15,-10,-5,0,5,10,15,20,25])
+axs[0].legend(loc='lower right')
+textstr1 = '\n'.join((
+  f'$R_{{out}} =$ {Rout:.2f} $\Omega$',
+  f'$G_{{m1}}\\,R_{{out}} =$ {Gm1Rout:.2e}',
+  f'$f_z =$ {fz/1e3:.1f} kHz',
+  f'$f_0 =$ {f0/1e6:.1f} MHz',
+  f'$Q =$ {Q:.1f}'))
+axs[0].text(0.04, 0.93, textstr1, ha='left', va='top', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim,Zoutphidegsim,'ro', markersize=3, markevery=10, label='simulation')
+axs[1].semilogx(fthe,Zoutphidegthe,'b-',label='theory')
+axs[1].semilogx([fmin,fz],[45,45],'k--', linewidth=lw)
+axs[1].semilogx([fz,fz],[45,90],'k--', linewidth=lw)
+axs[1].semilogx([fmin,f0],[0,0],'k--', linewidth=lw)
+axs[1].semilogx([f0,f0],[0,90],'k--', linewidth=lw)
+axs[1].set(xlim=(fmin,fmax))
+axs[1].set(ylim=(-90,90))
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{G_{m1}\,Z_{out}\\}$ [deg]')
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set_yticks([-90,-45,0,45,90])
+axs[1].legend(loc='upper right')
+textstr2 = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF',
+  f'$C_c =$ {Cc/1e-12:.0f} pF'))
+axs[1].text(0.04, 0.07, textstr2, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+The low output resistance now only holds up to the frequency of the zero $f_z =$ `{python} f'{fz/1e3:.3f}'` $kHz$. Above that it increases to reach the value obtained by the SVF at the resonance frequency $f_0 =$ `{python} f'{f0/1e6:.3f}'` $MHz$.
+
+## Stability analysis
+In the previous sections we have seen that the FVF closed-loop transfer function shows a strong peaking that might degrade the step response. The step response can be improved by adding a compensation capacitance that lowers the dominant pole at the cost of a lower bandwidth for the same current consumption.
+
+In this Section we want to analyze the stability of the circuit in the same way it is done in @bib:carvajal:tcas1:52:7:july:2005. The advantage is that this approach allows for the verification of the loop-gain by simulation which was not possible with the previous approach. Remember that the feedback is made of the transconductance of M~1~ cascaded with the CS stage M~2~. The stability can be analyzed by setting an appropriate DC voltage at the input, opening the loop by disconnecting the gate of M~2~, applying a test signal at its gate and looking the signal that is fed back to the drain of M~1~ (small-signal voltage $\Delta V_2$) as shown in @fig-ssf_open_loop @bib:carvajal:tcas1:52:7:july:2005.
+
+Similarly to the SSF, when we open the loop by discconecting the gate of M~2~, the parasitic capacitances associated to its gate  don't load the drain of M~1~anymore. We therefore have to add these gate capacitances to the circuit netlist.
+
+The parameters are calculated for the FVF in @tbl-fvf_ol_parameters1.
+
+```{python}
+#| label: tbl-fvf_ol_parameters1
+#| tbl-cap: Estimation of the small-signal parameters for the calculation of the open-loop gain.
+
+def Aol(s,Adc,wz,wp1,wp2):
+  num=Adc*(1+s/wz)
+  den=(1+s/wp1)*(1+s/wp2)
+  return num/den
+
+Cp1=CBD1
+Cp2=CGD1
+
+Adcthe=(Gm1+Gds1)*Gm2/(Gds1*Gds2)
+AdcdBthe=20*log(Adcthe)
+wz=(Gm1+Gds1)/Cp1
+fz=wz/(2*pi)
+wp1=Gds1*Gds2/(CL*Gds1+Cp1*Gds2+Cp2*(Gm1+Gds1+Gds2))
+fp1=wp1/(2*pi)
+wp2=(CL*Gds1+Cp1*Gds2+Cp2*(Gm1+Gds1+Gds2))/(Cp1*Cp2+CL*(Cp1+Cp2))
+fp2=wp2/(2*pi)
+wu=sqrt(Adcthe*wp1*wp2)
+fu=wu/(2*pi)
+PM=180+np.angle(Aol(1j*wu,Adcthe,wz,wp1,wp2),deg=True)
+
+table = [["$A_{{dc}}$",f'{Adcthe:.3f}',"-"],
+         ["$A_{{dc}}$",f'{AdcdBthe:.3f}',"dB"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_{{p1}}$",f'{fp1/1e3:.3f}',"$kHz$"],
+         ["$f_{{p2}}$",f'{fp2/1e6:.3f}',"$MHz$"],
+         ["$f_u$",f'{fu/1e6:.3f}',"$MHz$"],
+         ["$PM$",f'{PM:.3f}',"$^{{\\circ}}$"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+![Schematic of the FVF used for the simulation of the open-loop gain.](Figures/fvf_openloop_sim){width=60% #fig-fvf_openloop_sim}
+
+We can simulate the open-loop transfer function using the schematic shown in @fig-fvf_openloop_sim. We need to add M~3~ and M~4~ which are identical to M~1~ and M ~2~, respectively, in order to generate the DC voltage that needs to be applied to the gate of M~2~ so that its current is equal to $I_b$. The simulation results of the open-loop gain are compared to the theoretical estimation in @fig-fvf_oltf1.
+
+```{python}
+#| label: fig-fvf_oltf1
+#| fig-cap: Simulated open-loop transfer function compared to theoretical estimation.
+
+circuitName="fvfol"
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+fmin=1e2
+fmax=1e9
+Ndec=201
+
+if newSim:
+  paramstr = '\n'.join((
+    f'.param VDD={VDD:.1f} Vinq={Vinq:.3f} Ib={Ib/1e-6:.3f}u',
+    f'.param CL={CL/1e-12:.3f}p CGD2={CGD2/1e-15:.3f}f CG2={CG2/1e-15:.3f}f',
+    f'.param W1={W1/1e-6:.2f}u L1={L1/1e-6:.2f}u AD={AD1:.2e} PD={PD1:.2e}',
+    f'.param W2={W2/1e-6:.2f}u L2={L2/1e-6:.2f}u AD={AD2:.2e} PD={PD2:.2e}'
+  ))
+  # Write the transistors sizes and bias to the ngspice directory
+  with open(simulationPath+'size_bias4.par', 'w') as f:
+    f.write(paramstr)
+  # Write the transistors sizes and bias to the qucs-s directory
+  with open(qucsPath+'size_bias4.par', 'w') as f:
+    f.write(paramstr)
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "fvfol.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+AmagdBsim=df_sim['AmagdB'].to_numpy()
+Aphidegsim=df_sim['Aphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+fmax=fsim[Npts-1]
+
+fthe=fsim
+
+AmagdBthe=np.zeros(Npts)
+Aphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  AmagdBthe[k]=20*log(abs(Aol(jw,Adcthe,wz,wp1,wp2)))
+  Aphidegthe[k]=np.angle(Aol(jw,Adcthe,wz,wp1,wp2),deg=True)
+
+Aphidegsim=Aphidegsim-180
+#Aolphidegthe=Aolphidegthe
+
+regexp = re.compile(r'adc' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      AdcdBsim=float(match.group(1))
+
+regexp = re.compile(r'fp1' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      fp1sim=float(match.group(1))
+
+regexp = re.compile(r'fp2' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      fp2sim=float(match.group(1))
+
+regexp = re.compile(r'gbw' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      gbwsim=float(match.group(1))
+
+regexp = re.compile(r'pgbw' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      pgbwsim=float(match.group(1))
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+AmagdBthefp1=20*log(abs(Aol(1j*wp1,Adcthe,wz,wp1,wp2)))
+AmagdBthefp2=20*log(abs(Aol(1j*wp2,Adcthe,wz,wp1,wp2)))
+Aphidegthefu=np.angle(Aol(1j*wu,Adcthe,wz,wp1,wp2),deg=True)
+
+axs[0].semilogx(fsim, AmagdBsim, 'ro', markersize=3, markevery=18, label='simulation')
+axs[0].semilogx(fthe, AmagdBthe, 'b-',label='theory')
+axs[0].semilogx([fp1,fp1],[-60,AmagdBthefp1],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp1],[AmagdBthefp1,AmagdBthefp1],'k--', linewidth=lw)
+axs[0].semilogx([fp2,fp2],[-60,AmagdBthefp2],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp2],[AmagdBthefp2,AmagdBthefp2],'k--', linewidth=lw)
+axs[0].semilogx([fu,fu],[-60,0],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fu],[0,0],'k--', linewidth=lw)
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylabel='$|A_v|$ [dB]')
+axs[0].set(ylim=(-60,100))
+axs[0].set_yticks(range(-60,120,20))
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$A_{{dc}} =$ {AdcdBthe:.1f} dB (theory)',
+  f'$A_{{dc}} =$ {AdcdBsim:.1f} dB (sim)',
+  f'$f_z =$ {fz/1e6:.1f} MHz',
+  f'$f_{{p1}} =$ {fp1/1e3:.1f} kHz (theory)',
+  f'$f_{{p1}} =$ {fp1sim/1e3:.1f} kHz (sim)',
+  f'$f_{{p2}} =$ {fp2/1e6:.1f} MHz (theory)',
+  f'$f_{{p2}} =$ {fp2sim/1e6:.1f} MHz (sim)'))
+axs[0].text(1.04, 0.5, textstr1, ha='left', va='center', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim, Aphidegsim, 'ro', markersize=3, markevery=18, label='simulation')
+axs[1].semilogx(fsim, Aphidegthe, 'b-',label='theory')
+axs[1].semilogx([fp1,fp1],[-45,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fp1],[-45,-45],'k--', linewidth=lw)
+axs[1].semilogx([fp2,fp2],[-135,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fp2],[-135,-135],'k--', linewidth=lw)
+axs[1].semilogx([fu,fu],[Aphidegthefu,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fu],[Aphidegthefu,Aphidegthefu],'k--', linewidth=lw)
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_v\\}$ [degree]')
+axs[1].set(xlim=(fmin,fmax))
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set(ylim=(-180,0))
+axs[1].set_yticks([-180,-135,-90,-45,0])
+axs[1].legend(loc='upper right')
+textstr2 = '\n'.join((
+  f'$GBW =$ {fu/1e6:.1f} MHz (theory)',
+  f'$GBW =$ {gbwsim/1e6:.1f} MHz (sim)',
+  f'$PM =$ {PM:.1f} deg (theory)',
+  f'$PM =$ {pgbwsim:.1f} deg (sim)'))
+axs[1].text(1.04, 0.5, textstr2, ha='left', va='center', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+textstr3 = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.04, 0.07, textstr3, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+We see a reasonable match between the simulation and the theoretical results. The simulated and calculated DC gain and dominant pole are close. However, there is a small discrepancy at higher frequency with a simulated non-dominant pole $f_{p2} =$ `{python} f'{fp2sim/1e6:.3f}'` $MHz$ compared to `{python} f'{fp2/1e6:.3f}'` $MHz$.
+
+We can see that the circuit is actually stable but with a small phase margin.
+
+Adding a compensation capacitor $C_c$ at the drain of M~1~ with a value equal to the load capacitance results in the small-signal parameters given in @tbl-fvf_ol_parameters2. The loop-gain for these parameters is compared to simulations in @fig-fvf_oltf2.
+
+
+```{python}
+#| label: tbl-fvf_ol_parameters2
+#| tbl-cap: Estimation of the small-signal parameters for the calculation of the open-loop gain with compensation capacitance.
+Cc=CL
+Cp2=Cc
+Adcthe=(Gm1+Gds1)*Gm2/(Gds1*Gds2)
+AdcdBthe=20*log(Adcthe)
+wz=(Gm1+Gds1)/Cp1
+fz=wz/(2*pi)
+wp1=Gds1*Gds2/(CL*Gds1+Cp1*Gds2+Cp2*(Gm1+Gds1+Gds2))
+fp1=wp1/(2*pi)
+wp2=(CL*Gds1+Cp1*Gds2+Cp2*(Gm1+Gds1+Gds2))/(Cp1*Cp2+CL*(Cp1+Cp2))
+fp2=wp2/(2*pi)
+wu=sqrt(Adcthe*wp1*wp2)
+fu=wu/(2*pi)
+PM=180+np.angle(Aol(1j*wu,Adcthe,wz,wp1,wp2),deg=True)
+
+table = [["$C_L$",f'{CL/1e-12:.0f}',"$pF$"],
+         ["$C_c$",f'{Cc/1e-12:.3f}',"$pF$"],
+         ["$A_{{dc}}$",f'{Adcthe:.3f}',"-"],
+         ["$A_{{dc}}$",f'{AdcdBthe:.3f}',"dB"],
+         ["$f_z$",f'{fz/1e6:.3f}',"$MHz$"],
+         ["$f_{{p1}}$",f'{fp1/1e3:.3f}',"$kHz$"],
+         ["$f_{{p2}}$",f'{fp2/1e6:.3f}',"$MHz$"],
+         ["$f_u$",f'{fu/1e6:.3f}',"$MHz$"],
+         ["$PM$",f'{PM:.3f}',"$^{{\\circ}}$"]
+        ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+```{python}
+#| label: fig-fvf_oltf2
+#| fig-cap: Simulated open-loop transfer function with compensation capacitor $C_c$ compared to theoretical estimation.
+
+circuitName="fvfol2"
+simtype = ".ac"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+fmin=1e0
+fmax=1e8
+Ndec=201
+
+if newSim:
+  paramstr = '\n'.join((
+    f'.param VDD={VDD:.1f} Vinq={Vinq:.3f} Ib={Ib/1e-6:.3f}u',
+    f'.param CL={CL/1e-12:.3f}p Cc={Cc/1e-12:.3f}p CGD2={CGD2/1e-15:.3f}f CG2={CG2/1e-15:.3f}f',
+    f'.param W1={W1/1e-6:.2f}u L1={L1/1e-6:.2f}u',
+    f'.param W2={W2/1e-6:.2f}u L2={L2/1e-6:.2f}u'
+  ))
+  # Write the transistors sizes and bias to the ngspice directory
+  with open(simulationPath+'size_bias2.par', 'w') as f:
+    f.write(paramstr)
+  # Write the transistors sizes and bias to the qucs-s directory
+  with open(qucsPath+'size_bias2.par', 'w') as f:
+    f.write(paramstr)
+  simpar = '\n'.join((
+    f'.csparam fmin={fmin:.3e}',
+    f'.csparam fmax={fmax:.3e}',
+    f'.csparam Ndec={Ndec:.0f}'
+  ))
+  simparFile = simulationPath + "fvfol2.ac.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+fsim=df_sim['frequency'].to_numpy()
+AmagdBsim=df_sim['AmagdB'].to_numpy()
+Aphidegsim=df_sim['Aphdeg'].to_numpy()
+Npts=len(fsim)
+fmin=fsim[0]
+fmax=fsim[Npts-1]
+
+fthe=fsim
+
+AmagdBthe=np.zeros(Npts)
+Aphidegthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  jw=1j*2*pi*fthe[k]
+  AmagdBthe[k]=20*log(abs(Aol(jw,Adcthe,wz,wp1,wp2)))
+  Aphidegthe[k]=np.angle(Aol(jw,Adcthe,wz,wp1,wp2),deg=True)
+
+Aphidegsim=Aphidegsim-180
+#Aolphidegthe=Aolphidegthe
+
+regexp = re.compile(r'adc' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      AdcdBsim=float(match.group(1))
+
+regexp = re.compile(r'fp1' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      fp1sim=float(match.group(1))
+
+regexp = re.compile(r'fp2' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      fp2sim=float(match.group(1))
+
+regexp = re.compile(r'gbw' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      gbwsim=float(match.group(1))
+
+regexp = re.compile(r'pgbw' + refloat)
+with open(simulationLog) as f:
+  for line in f:
+    match = re.match(regexp, line)
+    if match:
+      pgbwsim=float(match.group(1))
+
+plt.rcParams.update(BodePlotParams)
+fig, axs = plt.subplots(2, sharex=True)
+
+AmagdBthefp1=20*log(abs(Aol(1j*wp1,Adcthe,wz,wp1,wp2)))
+AmagdBthefp2=20*log(abs(Aol(1j*wp2,Adcthe,wz,wp1,wp2)))
+Aphidegthefu=np.angle(Aol(1j*wu,Adcthe,wz,wp1,wp2),deg=True)
+
+axs[0].semilogx(fsim, AmagdBsim, 'ro', markersize=3, markevery=20, label='simulation')
+axs[0].semilogx(fthe, AmagdBthe, 'b-',label='theory')
+axs[0].semilogx([fp1,fp1],[-60,AmagdBthefp1],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp1],[AmagdBthefp1,AmagdBthefp1],'k--', linewidth=lw)
+axs[0].semilogx([fp2,fp2],[-60,AmagdBthefp2],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fp2],[AmagdBthefp2,AmagdBthefp2],'k--', linewidth=lw)
+axs[0].semilogx([fu,fu],[-60,0],'k--', linewidth=lw)
+axs[0].semilogx([fmin,fu],[0,0],'k--', linewidth=lw)
+axs[0].set(xlim=(fmin,fmax))
+axs[0].set(ylabel='$|A_v|$ [dB]')
+axs[0].set(ylim=(-60,100))
+axs[0].set_yticks(range(-60,120,20))
+axs[0].legend(loc='upper right')
+textstr1 = '\n'.join((
+  f'$A_{{dc}} =$ {AdcdBthe:.1f} dB (theory)',
+  f'$A_{{dc}} =$ {AdcdBsim:.1f} dB (sim)',
+  f'$f_z =$ {fz/1e6:.1f} MHz',
+  f'$f_{{p1}} =$ {fp1:.1f} Hz (theory)',
+  f'$f_{{p1}} =$ {fp1sim:.1f} Hz (sim)',
+  f'$f_{{p2}} =$ {fp2/1e6:.1f} MHz (theory)',
+  f'$f_{{p2}} =$ {fp2sim/1e6:.1f} MHz (sim)'))
+axs[0].text(1.04, 0.5, textstr1, ha='left', va='center', transform=axs[0].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogx(fsim, Aphidegsim, 'ro', markersize=3, markevery=20, label='simulation')
+axs[1].semilogx(fsim, Aphidegthe, 'b-',label='theory')
+axs[1].semilogx([fp1,fp1],[-45,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fp1],[-45,-45],'k--', linewidth=lw)
+axs[1].semilogx([fp2,fp2],[-135,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fp2],[-135,-135],'k--', linewidth=lw)
+axs[1].semilogx([fu,fu],[Aphidegthefu,0],'k--', linewidth=lw)
+axs[1].semilogx([fmin,fu],[Aphidegthefu,Aphidegthefu],'k--', linewidth=lw)
+axs[1].set(xlabel='Frequency [Hz]', ylabel='$arg\\{A_v\\}$ [degree]')
+axs[1].set(xlim=(fmin,fmax))
+#axs[1].set_xticks([1e1,1e2,1e3,1e4,1e5,1e6,1e7,1e8])
+axs[1].set(ylim=(-180,0))
+axs[1].set_yticks([-180,-135,-90,-45,0])
+axs[1].legend(loc='upper right')
+textstr2 = '\n'.join((
+  f'$GBW =$ {fu/1e6:.1f} MHz (theory)',
+  f'$GBW =$ {gbwsim/1e6:.1f} MHz (sim)',
+  f'$PM =$ {PM:.1f} deg (theory)',
+  f'$PM =$ {pgbwsim:.1f} deg (sim)'))
+axs[1].text(1.04, 0.5, textstr2, ha='left', va='center', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+textstr3 = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+axs[1].text(0.04, 0.07, textstr3, ha='left', va='bottom', transform=axs[1].transAxes, size=textFontSize,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.subplots_adjust(hspace=0.1)
+if savePlots: saveFigures(savePlotPath, 'CS_GBW_tf_long_sim')
+plt.show()
+plt.style.use(pltStyle)
+```
+
+We now see a perfect match between simulation and the theoretical estimation of the open-loop transfer function with a compensation capacitor $C_c$ connected at the drain of M~1~. The dominant pole has been shifted to very low frequency and the phase margin has been increased to $PM =$ `{python} f'{pgbwsim:.1f}'` $^{\circ}$ which will ensure an acceptable step response which still shows some overshoot as shown in @fig-fvf_step2.
+
+```{python}
+#| label: fig-fvf_step2
+#| fig-cap: FVF step response with compensation capacitor $C_c$.
+
+circuitName = "fvf2"
+simtype = ".tran"
+fileName = circuitName + simtype
+simulationPath = "./Simulations/FVF/ngspice/"
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+if newSim:
+  tstart=0
+  tstop=3e-6
+  tstep=1e-9
+  simpar = '\n'.join((
+    f'.csparam tsart={tstart:.3e}',
+    f'.csparam tstop={tstop:.3e}',
+    f'.csparam tstep={tstep:.3e}'
+  ))
+  simparFile = simulationPath + "fvf2.tran.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+regexp = re.compile(r'v\(out\)' + refloat)
+with open(simulationVoltages) as f:
+  for line in f:
+    match = re.search(regexp, line)
+    if match:
+      Voutqsim=float(match.group(1))
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+
+tsim=df_sim['time'].to_numpy()
+Vinsim=df_sim['Vin'].to_numpy()
+Voutsim=df_sim['Vout'].to_numpy()
+DVinsim=Vinsim-Vinq
+DVoutsim=Voutsim-Voutqsim
+
+Npts=len(tsim)
+tmin=tsim[0]
+tmax=tsim[Npts-1]
+
+#plt.plot([td/1e-6,(td+1/(2*pi*GBWthe))/1e-6],[0,DVin/1e-3], 'k--', linewidth=lw)
+#plt.plot([0,tmax/1e-6],[Voutfin/1e-3,Voutfin/1e-3], 'k--', linewidth=lw)
+plt.plot(tsim/1e-6,DVinsim/1e-3,'b-', label='Input')
+plt.plot(tsim/1e-6,DVoutsim/1e-3,'r-', label='Output (Sim.)')
+plt.xlim(tmin/1e-6,tmax/1e-6)
+#plt.xticks(np.arange(0,10.1,0.2))
+plt.xlabel('Time [$\\mu s$]')
+plt.ylim(0,14)
+plt.ylabel('$\\Delta V_{in}$, $\\Delta V_{out}$ [mV]')
+plt.legend(loc='lower right')
+#plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
+textstr = '\n'.join((
+  f'$V_{{in,q}} =$ {Vinq:.3f} V',
+  f'$V_{{outq}} =$ {Voutqsim:.3f} V'))
+plt.text(0.65, 0.95, textstr, ha='left', va='top', size=textFontSize, transform=plt.gca().transAxes,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+if savePlots: saveFigures(savePlotPath, otaName + '_step_response_small_sim')
+plt.show()
+```
+
+## Voltage compliance
+
+```{python}
+# Sizing of current mirror M3a-M3b
+IC3=10
+ID3=Ib2
+Ispec3= ID3/IC3
+WoverL3=Ispec3/Ispecsqp
+L3=1e-6
+Leff3=L3+DLp
+Weff3=WoverL3*Leff3
+W3=Weff3-DWp
+
+# Min and max input voltages
+VGS1=ekv_df.at["M1","VG-VT0"]+VT0n
+Vimin=VGS1
+VGS2=ekv_df.at["M2","VG-VT0"]+VT0n
+Vimax=VGS1+VGS2
+DVin=Vimax-Vimin
+```
+
+![Schematic used for the DC simulation.](Figures/fvf_dc_sweep_sim){width=50% #fig-fvf_dc_sweep_sim}
+
+For checking the input-output voltage compliance, we use the schematic shown in @fig-fvf_dc_sweep_sim where we have replaced the ideal current source by a pMOS current mirror M~3a~-M~3b~.
+
+In order to simulate the circuit of @fig-fvf_dc_sweep_sim, we need to size the current mirror. We choose to bias them at the onset of strong inversion setting their inversion coefficient to $IC_3 =$ `{python} f'{IC3:.0f}'`. For $L_3 =$ `{python} f'{L3/1e-6:.2f}'` $\mu m$, we get $W_3 =$ `{python} f'{W3/1e-6:.2f}'` $\mu m$.
+
+The minimum input voltage is defined as the voltage for which the output voltage gets equal to zero. It is approximately given by $V_{in,min} \cong V_{GS1} \cong$ `{python} f'{Vimin:.3f}'` $V$ and the maximum input voltage is equal to $V_{in,max} \cong V_{GS1} + V_{GS2} \cong$ `{python} f'{Vimax:.3f}'` $V$. The FVF can therefore operate with an input voltage ranging between `{python} f'{Vimin:.3f}'` $V$ and `{python} f'{Vimax:.3f}'` $V$, corresponding to an input voltage range of about one threshol voltage `{python} f'{DVin:.3f}'` $V$. This is clearly the main drawback of the FVF.
+
+This can be verified by simulating the large-signal input-output characteristic which is plotted in @fig-fvf_dc_sweep and compared to the theoretical estimation. The simulated input voltage range is about equal to the theoretical estimation
+
+```{python}
+#| label: fig-fvf_dc_sweep
+#| fig-cap: Simulated large-signal input-output characteristic.
+
+circuitName = "fvf"
+simtype = ".dc"
+fileName = circuitName + simtype
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+Vinmin=0
+Vinmax=1.8
+Npts=1001
+dVin=(Vinmax-Vinmin)/(Npts-1)
+
+if newSim:
+  paramstr = '\n'.join((
+    f'.param VDD={VDD:.1f} Vinq={Vinq:.3f} Ib={Ib/1e-6:.3f}u',
+    f'.param CL={CL/1e-12:.3f}p',
+    f'.param W1={W1/1e-6:.2f}u L1={L1/1e-6:.2f}u',
+    f'.param W2={W2/1e-6:.2f}u L2={L2/1e-6:.2f}u',
+    f'.param W3={W3/1e-6:.2f}u L3={L3/1e-6:.2f}u'
+  ))
+  # Write the transistors sizes and bias to the ngspice directory
+  with open(simulationPath+'size_bias3.par', 'w') as f:
+    f.write(paramstr)
+  # Write the transistors sizes and bias to the qucs-s directory
+  with open(qucsPath+'size_bias3.par', 'w') as f:
+    f.write(paramstr)
+  simpar = '\n'.join((
+    f'.csparam Vinmin={Vinmin:.3e}',
+    f'.csparam Vinmax={Vinmax:.3e}',
+    f'.csparam dVin={dVin:.3e}'
+  ))
+  simparFile = simulationPath + "fv f.dc.par"
+  with open(simparFile, 'w') as f:
+    f.write(simpar)
+  #print('Starting NGSpice simulation...\n')
+  result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+
+df_sim=pd.read_table(simulationData, sep=' +', engine='python')
+
+Vinsim=df_sim['v-sweep'].to_numpy()
+Voutsim=df_sim['Vout'].to_numpy()
+
+Vinthe=Vinsim
+Voutthe=np.zeros(Npts)
+
+for k in range(0,Npts):
+  if Vinthe[k]<=Vimin:
+    Voutthe[k]=0
+  else:
+    if Vinthe[k]>=Vimax:
+      Voutthe[k]=Vimax-Vimin
+    else:
+      Voutthe[k]=Vinthe[k]-Vimin
+
+plt.plot(Vinsim, Voutsim, 'r-', label='Simulation')
+plt.plot(Vinthe, Voutthe, 'b--', label='Theory')
+plt.xlim(Vinmin,Vinmax)
+plt.xticks(np.arange(0,2,0.2))
+plt.xlabel('$V_{in}$ [$V$]')
+plt.ylim(0,0.6)
+#plt.yticks(np.arange(0.6,1.5,0.1))
+plt.ylabel('$V_{out}$ [V]')
+plt.legend(loc='lower right')
+textstr = '\n'.join((
+  f'$I_b =$ {Ib/1e-6:.3f} $\\mu A$',
+  f'$C_L =$ {CL/1e-12:.0f} pF'))
+plt.text(0.05, 0.93, textstr, ha='left', va='top', size=textFontSize, transform=plt.gca().transAxes,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+if savePlots: saveFigures(savePlotPath, otaName + '_transfer_characteristic_sim')
+plt.show()
+```
+
+## Summary
+The CS pMOS transistor of the SSF can be replaced by an nMOS CS that is stacked with M~1~ resulting in the FVF. The small-signal circuit of the FVF is identical to that of the SSF and therefore the two circuit share the same results. However, because the CS stage shares the same current than the voltage follower M~1~, the FVF consumes half the current compared to the SSF.
+
+# Conclusion
+We started to analyze the simple voltage (SVF) first, showing that to have a voltage gain as close to unity requires the common-drain transistor to be in a separate well @bib:ali:sscm:part1:2022. We then have evaluated the transfer function and output impedance showing that the output resistance is simply equal to $1/G_m$ of the common-drain transistor @bib:ali:sscm:part1:2022. To reduce this output resistance we then have investigated two improved voltage followers, namely the super source follower (SSF) @bib:gray:book:2009 @bib:ali:sscm:part3:2023 and the flipped voltage follower (FVF) @bib:carvajal:tcas1:52:7:july:2005 @bib:ali:sscm:part2:2023.
+
+The SSF adds a common-source stage in a loop that maintains the output voltage constant resulting in a much lower output resistance @bib:ali:sscm:part3:2023. Because of the feedback loop, the SSF shows a 2^nd^-order transfer function with a high peaking at high frequency due to the parasitic capacitances at the gate of the CS transistor. We have analyzed the open-loop transfer function and found out that the circuit can be compensated similarly to a two-stage OPAMP by adding a compensation capacitor. Adding this compensation capacitor, increases the phase margin, resulting in an acceptable step response. We then looked at the output impedance which shows a low frequency output resistance that is significantly lower than that of the SVF. Adding the compensation capacitor limits the bandwidth over which the output impedance is low. The dawback of the SSF is that we need about twice the current of the SVF to achieve about the same bandwidth. The main advantage is the very low output resistance.
+
+The FVF is derived from the SSF by replacing the pMOS CS transistor of the SSF by an nMOS which can be stacked below the voltage follower and shares the same current @bib:carvajal:tcas1:52:7:july:2005 @bib:ali:sscm:part2:2023 @bib:surkanti:mwcas:2017. The small-signal circuit of the FVF is identical to that of the SSF and therefore all the results obtained for the SSF are also valid for the FVF. The main difference is that the FVF achieves about the same perfomance than the SSF but at half the current. It basically consumes the same current than the SVF but offers much lower output resistance. On the other hand, its input voltage compliance is rather limited compared to the SSF and SVF.
+
+Voltage followers are key circuits that provide a unity voltage gain with a low output resistance. The SVF can be improved by using either the SSF or with the same current consumption the FVF.
+
+# References
