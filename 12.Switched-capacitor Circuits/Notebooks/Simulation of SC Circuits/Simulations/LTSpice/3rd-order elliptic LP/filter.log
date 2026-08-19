@@ -1,0 +1,14 @@
+LTspice 24.1.9 for Windows
+Circuit: M:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\3rd-order elliptic LP\filter.net
+Start Time: Mon Aug 10 16:27:25 2026
+solver = Normal
+Maximum thread count: 20
+tnom = 27
+temp = 27
+method = trap
+.OP point found by inspection.
+Total elapsed time: 0.142 seconds.
+
+Files loaded:
+M:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\3rd-order elliptic LP\filter.net
+

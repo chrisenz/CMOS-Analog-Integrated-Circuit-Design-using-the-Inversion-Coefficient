@@ -1,0 +1,74 @@
+LTspice 24.1.9 for Windows
+Circuit: L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net
+Start Time: Thu Aug 13 23:19:54 2026
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(8): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E2 out2 0 in 0 Laplace=(n22*(DT*s)^2+n21*DT*s+n20)/(d22*(DT*s)^2+d21*DT*s+d20)
+                                  ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(8): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E2 out2 0 in 0 Laplace=(n22*(DT*s)^2+n21*DT*s+n20)/(d22*(DT*s)^2+d21*DT*s+d20)
+                                                              ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(10): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E3 out3 0 in 0 Laplace=(n33*(DT*s)^3+n32*(DT*s)^2+n31*DT*s+n30)/(d33*(DT*s)^3+d32*(DT*s)^2+d31*DT*s+d30)
+                                  ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(10): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E3 out3 0 in 0 Laplace=(n33*(DT*s)^3+n32*(DT*s)^2+n31*DT*s+n30)/(d33*(DT*s)^3+d32*(DT*s)^2+d31*DT*s+d30)
+                                               ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(10): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E3 out3 0 in 0 Laplace=(n33*(DT*s)^3+n32*(DT*s)^2+n31*DT*s+n30)/(d33*(DT*s)^3+d32*(DT*s)^2+d31*DT*s+d30)
+                                                                           ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(10): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E3 out3 0 in 0 Laplace=(n33*(DT*s)^3+n32*(DT*s)^2+n31*DT*s+n30)/(d33*(DT*s)^3+d32*(DT*s)^2+d31*DT*s+d30)
+                                                                                        ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(12): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E4 out4 0 in 0 Laplace=(n44*(DT*s)^4+n43*(DT*s)^3+n42*(DT*s)^2+n41*DT*s+n40)/(d44*(DT*s)^4+d43*(DT*s)^3+d42*(DT*s)^2+d41*DT*s+d40)
+                                  ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(12): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E4 out4 0 in 0 Laplace=(n44*(DT*s)^4+n43*(DT*s)^3+n42*(DT*s)^2+n41*DT*s+n40)/(d44*(DT*s)^4+d43*(DT*s)^3+d42*(DT*s)^2+d41*DT*s+d40)
+                                               ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(12): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E4 out4 0 in 0 Laplace=(n44*(DT*s)^4+n43*(DT*s)^3+n42*(DT*s)^2+n41*DT*s+n40)/(d44*(DT*s)^4+d43*(DT*s)^3+d42*(DT*s)^2+d41*DT*s+d40)
+                                                            ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(12): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E4 out4 0 in 0 Laplace=(n44*(DT*s)^4+n43*(DT*s)^3+n42*(DT*s)^2+n41*DT*s+n40)/(d44*(DT*s)^4+d43*(DT*s)^3+d42*(DT*s)^2+d41*DT*s+d40)
+                                                                                        ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(12): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E4 out4 0 in 0 Laplace=(n44*(DT*s)^4+n43*(DT*s)^3+n42*(DT*s)^2+n41*DT*s+n40)/(d44*(DT*s)^4+d43*(DT*s)^3+d42*(DT*s)^2+d41*DT*s+d40)
+                                                                                                     ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(12): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E4 out4 0 in 0 Laplace=(n44*(DT*s)^4+n43*(DT*s)^3+n42*(DT*s)^2+n41*DT*s+n40)/(d44*(DT*s)^4+d43*(DT*s)^3+d42*(DT*s)^2+d41*DT*s+d40)
+                                                                                                                  ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(14): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E5 out5 0 in 0 Laplace=(n55*(DT*s)^5+n54*(DT*s)^4+n53*(DT*s)^3+n52*(DT*s)^2+n51*DT*s+n50)/(d55*(DT*s)^5+d54*(DT*s)^4+d53*(DT*s)^3+d52*(DT*s)^2+d51*DT*s+d50)
+                                  ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(14): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E5 out5 0 in 0 Laplace=(n55*(DT*s)^5+n54*(DT*s)^4+n53*(DT*s)^3+n52*(DT*s)^2+n51*DT*s+n50)/(d55*(DT*s)^5+d54*(DT*s)^4+d53*(DT*s)^3+d52*(DT*s)^2+d51*DT*s+d50)
+                                               ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(14): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E5 out5 0 in 0 Laplace=(n55*(DT*s)^5+n54*(DT*s)^4+n53*(DT*s)^3+n52*(DT*s)^2+n51*DT*s+n50)/(d55*(DT*s)^5+d54*(DT*s)^4+d53*(DT*s)^3+d52*(DT*s)^2+d51*DT*s+d50)
+                                                            ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(14): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E5 out5 0 in 0 Laplace=(n55*(DT*s)^5+n54*(DT*s)^4+n53*(DT*s)^3+n52*(DT*s)^2+n51*DT*s+n50)/(d55*(DT*s)^5+d54*(DT*s)^4+d53*(DT*s)^3+d52*(DT*s)^2+d51*DT*s+d50)
+                                                                         ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(14): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E5 out5 0 in 0 Laplace=(n55*(DT*s)^5+n54*(DT*s)^4+n53*(DT*s)^3+n52*(DT*s)^2+n51*DT*s+n50)/(d55*(DT*s)^5+d54*(DT*s)^4+d53*(DT*s)^3+d52*(DT*s)^2+d51*DT*s+d50)
+                                                                                                     ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(14): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E5 out5 0 in 0 Laplace=(n55*(DT*s)^5+n54*(DT*s)^4+n53*(DT*s)^3+n52*(DT*s)^2+n51*DT*s+n50)/(d55*(DT*s)^5+d54*(DT*s)^4+d53*(DT*s)^3+d52*(DT*s)^2+d51*DT*s+d50)
+                                                                                                                  ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(14): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E5 out5 0 in 0 Laplace=(n55*(DT*s)^5+n54*(DT*s)^4+n53*(DT*s)^3+n52*(DT*s)^2+n51*DT*s+n50)/(d55*(DT*s)^5+d54*(DT*s)^4+d53*(DT*s)^3+d52*(DT*s)^2+d51*DT*s+d50)
+                                                                                                                               ^
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net(14): Note: The caret character means exponentiation in this context. If you wish to silence this warning, use the "**" operator instead or add ".OPTIONS NO_CARET_WARNING" to your netlist.
+E5 out5 0 in 0 Laplace=(n55*(DT*s)^5+n54*(DT*s)^4+n53*(DT*s)^3+n52*(DT*s)^2+n51*DT*s+n50)/(d55*(DT*s)^5+d54*(DT*s)^4+d53*(DT*s)^3+d52*(DT*s)^2+d51*DT*s+d50)
+                                                                                                                                            ^
+solver = Normal
+Maximum thread count: 8
+tnom = 27
+temp = 27
+method = modified trap
+.OP point found by inspection.
+Total elapsed time: 0.708 seconds.
+
+Files loaded:
+L:\My Drive\Lectures\Postgraduated\Advanced Analog\Slides\SCF\Quarto\Simulation of SC Circuits\Simulations\LTSpice\Delay\Delay_1.net
+
