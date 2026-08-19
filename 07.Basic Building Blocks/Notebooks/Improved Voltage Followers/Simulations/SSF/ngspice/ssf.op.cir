@@ -1,0 +1,18 @@
+Simulation of the super source follower with the EKV 2.6 model by C. Enz
+
+.include ekv018va.par ; model file for EKV2.6
+.include size_bias.par ; Size and bias values
+.include ssf.net ; Circuit netlist
+
+.control
+ save @N1[Id] @N1[Ispec] @N1[IC] @N1[n0] @N1[gm] @N1[gms] @N1[gds] @N1[gmbs] @N1[Rn] @N1[Vnth] @N1[gamman] @N1[Vnfl] @N1[Vdsat]
+ save @N2[Id] @N2[Ispec] @N2[IC] @N2[n0] @N2[gm] @N2[gms] @N2[gds] @N2[gmbs] @N2[Rn] @N2[Vnth] @N2[gamman] @N2[Vnfl] @N2[Vdsat]
+ op
+ wrnodev $inputdir/ssf.op.ic
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/ssf.op.dat @N1[Id] @N1[Ispec] @N1[IC] @N1[Vdsat] @N1[n0] @N1[gm] @N1[gms] @N1[gds] @N1[gmbs] @N1[Rn] @N1[Vnth] @N1[gamman] @N1[Vnfl]
+ set appendwrite
+ wrdata $inputdir/ssf.op.dat @N2[Id] @N2[Ispec] @N2[IC] @N2[Vdsat] @N2[n0] @N2[gm] @N2[gms] @N2[gds] @N2[gmbs] @N2[Rn] @N2[Vnth] @N2[gamman] @N2[Vnfl] 
+.endc
+.end

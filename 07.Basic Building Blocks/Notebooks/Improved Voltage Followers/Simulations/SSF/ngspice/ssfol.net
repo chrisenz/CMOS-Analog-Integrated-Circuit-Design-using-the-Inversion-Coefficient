@@ -1,0 +1,16 @@
+N1 1 in out out ekvn_va W={W1} L={L1}
+N2 out 2 vdd vdd ekvp_va W={W2} L={L2}
+N3 6 5 4 4 ekvn_va W={W1} L={L1}
+N4 4 6 vdd vdd ekvp_va W={W2} L={L2}
+CL out 0 {CL}
+CGD2 1 out {CGD2}
+CG2 1 0 {CG2}
+VDD vdd 0 {VDD}
+Vb1 in 0 {Vinq}
+Vb2 5 0 {Vinq}
+Ib1 vdd 1 {Ib1}
+Ib2 out 0 {Ib2}
+Ib3 vdd 6 {Ib1}
+Ib4 4 0 {Ib2}
+Eb 3 0 6 0 1
+Vtest 2 3 DC 0 AC 1

@@ -1,0 +1,23 @@
+Using SPARSE 1.3 as Direct Linear Solver
+Note: Starting dynamic gmin stepping
+Note: Dynamic gmin stepping completed
+Using SPARSE 1.3 as Direct Linear Solver
+Note: Starting dynamic gmin stepping
+Note: Dynamic gmin stepping completed
+
+Note: No compatibility mode selected!
+
+
+Circuit: simulation of the super source follower with the ekv 2.6 model by c. enz
+
+Doing analysis at TEMP = 27.000000 and TNOM = 27.000000
+
+
+No. of Data Rows : 1
+ASCII raw file "./Simulations/SSF/ngspice/ssf.ac.op"
+Doing analysis at TEMP = 27.000000 and TNOM = 27.000000
+
+
+No. of Data Rows : 805
+adc                 =  2.300969e+01 at=  2.740381e+07
+Note: Simulation executed from .control section 

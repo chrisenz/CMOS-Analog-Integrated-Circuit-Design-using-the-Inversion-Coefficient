@@ -1,0 +1,4 @@
+.param VDD=1.8 Vinq=0.900 Ib1=3.344u Ib2=6.689u
+.param CL=10.000p CGD2=2.698f CG2=7.365f
+.param W1=4.28u L1=1.00u AD=1.73e-12 PD=9.44e-06
+.param W2=8.21u L2=0.50u AD=3.31e-12 PD=1.73e-05

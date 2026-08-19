@@ -1,0 +1,20 @@
+Simulation of the super source follower with the EKV 2.6 model by C. Enz
+
+.include ekv018va.par ; model file for EKV2.6
+.include size_bias.par ; Size and bias values
+.include ssf.ac.par ; Parameter for the AC simulation
+.include ssf.net ; Circuit netlist
+
+.control
+ op
+ save v(out)
+ write $inputdir/ssf.ac.op
+ ac dec $&Ndec $&fmin $&fmax
+ let AmagdB=vdb(out)
+ let Aphdeg=180/PI*vp(out)
+ meas ac Adc max AmagdB
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/ssf.ac.dat AmagdB Aphdeg
+.endc
+.end

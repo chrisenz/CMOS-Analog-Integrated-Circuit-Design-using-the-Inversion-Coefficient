@@ -1,0 +1,7 @@
+* Intermediate Transient Solution
+* Circuit: simulation of the super source follower with the ekv 2.6 model by c. enz
+* Recorded at simulation time: 0
+.ic v(1) = 1.28649
+.ic v(in) = 0.9
+.ic v(out) = 0.392301
+.ic v(vdd) = 1.8

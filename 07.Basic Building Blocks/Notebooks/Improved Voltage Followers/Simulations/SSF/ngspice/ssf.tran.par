@@ -1,0 +1,3 @@
+.csparam tsart=0.000e+00
+.csparam tstop=1.000e-06
+.csparam tstep=1.000e-09

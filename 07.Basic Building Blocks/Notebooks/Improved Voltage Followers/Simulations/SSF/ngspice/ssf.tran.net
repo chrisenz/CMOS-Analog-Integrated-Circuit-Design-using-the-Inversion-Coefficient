@@ -1,0 +1,7 @@
+N1 1 in out out ekvn_va W={W1} L={L1}
+N2 out 1 vdd vdd ekvp_va W={W2} L={L2}
+CL out 0 {CL}
+VDD vdd 0 {VDD}
+Vin in 0 PULSE({Vinq} {Vinq+10m} 1e-7 1p 1p 1 0 1)
+Ib1 vdd 1 {Ib1}
+Ib2 out 0 {Ib2}

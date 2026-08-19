@@ -1,0 +1,37 @@
+Title: simulation of the super source follower with the ekv 2.6 model by c. enz
+Date: Tue Jul 21 14:09:17  2026
+Plotname: Operating Point
+Flags: real
+No. Variables: 14
+No. Points: 1
+Variables:
+	0	v(1)	voltage
+	1	v(2)	voltage
+	2	v(3)	voltage
+	3	v(4)	voltage
+	4	v(5)	voltage
+	5	v(6)	voltage
+	6	i(eb)	current
+	7	v(in)	voltage
+	8	v(out)	voltage
+	9	i(vb1)	current
+	10	i(vb2)	current
+	11	v(vdd)	voltage
+	12	i(vdd)	current
+	13	i(vtest)	current
+Values:
+ 0	1.286494870348719e+00
+	1.286494870248058e+00
+	1.286494870248058e+00
+	3.923007189546359e-01
+	9.000000000000000e-01
+	1.286494870248058e+00
+	0.000000000000000e+00
+	9.000000000000000e-01
+	3.923007189548318e-01
+	0.000000000000000e+00
+	0.000000000000000e+00
+	1.800000000000000e+00
+	-1.337800000000002e-05
+	0.000000000000000e+00
+
