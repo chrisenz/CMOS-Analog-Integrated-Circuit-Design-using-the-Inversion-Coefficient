@@ -1,0 +1,15 @@
+Simulation of the simple voltage follower with the EKV 2.6 model by C. Enz
+
+.include ekv018va.par ; model file for EKV2.6
+.include size_bias.par ; Size and bias values
+.include svf.net ; Circuit netlist
+
+.control
+ save @N1[Id] @N1[Ispec] @N1[IC] @N1[n0] @N1[gm] @N1[gms] @N1[gds] @N1[gmbs] @N1[Rn] @N1[Vnth] @N1[gamman] @N1[Vnfl] @N1[Vdsat]
+ op
+ wrnodev $inputdir/svf.op.ic
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/svf.op.dat @N1[Id] @N1[Ispec] @N1[IC] @N1[Vdsat] @N1[n0] @N1[gm] @N1[gms] @N1[gds] @N1[gmbs] @N1[Rn] @N1[Vnth] @N1[gamman] @N1[Vnfl]
+.endc
+.end

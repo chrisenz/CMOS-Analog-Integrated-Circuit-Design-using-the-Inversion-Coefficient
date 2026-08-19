@@ -1,0 +1,21 @@
+Title: simulation of the simple voltage follower with the ekv 2.6 model by c. enz
+Date: Tue Jul 21 14:09:12  2026
+Plotname: Operating Point
+Flags: real
+No. Variables: 6
+No. Points: 1
+Variables:
+	0	v(vdd)	voltage
+	1	v(1)	voltage
+	2	v(in)	voltage
+	3	v(out)	voltage
+	4	i(vdd)	current
+	5	i(vin)	current
+Values:
+ 0	1.800000000000000e+00
+	7.244854120320479e-01
+	9.000000000000000e-01
+	3.943789385583820e-01
+	-6.615269246618114e-06
+	0.000000000000000e+00
+

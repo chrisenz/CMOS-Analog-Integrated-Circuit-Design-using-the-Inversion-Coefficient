@@ -1,0 +1,29 @@
+Title: simulation of the svf with the ekv 2.6 model by c. enz
+Date: Tue Jul 21 14:09:12  2026
+Plotname: Operating Point
+Flags: real
+No. Variables: 10
+No. Points: 1
+Variables:
+	0	v(vdd)	voltage
+	1	v(1)	voltage
+	2	v(2)	voltage
+	3	v(3)	voltage
+	4	i(h1)	current
+	5	v(in)	voltage
+	6	v(out)	voltage
+	7	i(vdd)	current
+	8	i(vin)	current
+	9	i(vout)	current
+Values:
+ 0	1.800000000000000e+00
+	7.244854120320479e-01
+	0.000000000000000e+00
+	0.000000000000000e+00
+	0.000000000000000e+00
+	9.000000000000000e-01
+	3.943789385583820e-01
+	-6.615269246618114e-06
+	0.000000000000000e+00
+	0.000000000000000e+00
+

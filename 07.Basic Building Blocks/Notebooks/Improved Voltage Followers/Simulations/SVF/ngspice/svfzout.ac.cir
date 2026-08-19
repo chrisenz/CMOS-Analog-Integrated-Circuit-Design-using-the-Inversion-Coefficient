@@ -1,0 +1,19 @@
+Simulation of the SVF with the EKV 2.6 model by C. Enz
+
+.include ekv018va.par ; model file for EKV2.6
+.include size_bias.par ; Size and bias values
+.include svfzout.ac.par ; Parameter for the AC simulation
+.include svfzout.net ; Circuit netlist
+
+.control
+ op
+ save v(3)
+ write $inputdir/svfzout.ac.op
+ ac dec $&Ndec $&fmin $&fmax
+ let Youtmag=vm(3)
+ let Youtphdeg=180/PI*vp(3)
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/svfzout.ac.dat Youtmag Youtphdeg
+.endc
+.end
