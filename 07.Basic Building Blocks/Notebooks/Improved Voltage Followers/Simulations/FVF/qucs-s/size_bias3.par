@@ -1,0 +1,5 @@
+.param VDD=1.8 Vinq=0.780 Ib=3.344u
+.param CL=10.000p
+.param W1=4.28u L1=1.00u
+.param W2=4.28u L2=1.00u
+.param W3=3.53u L3=1.00u

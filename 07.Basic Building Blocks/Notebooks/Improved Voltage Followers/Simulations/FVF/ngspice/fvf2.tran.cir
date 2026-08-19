@@ -1,0 +1,19 @@
+Simulation of the flipped voltage follower with the EKV 2.6 model by C. Enz
+
+.include ekv018va.par ; model file for EKV2.6
+.include size_bias2.par ; Size and bias values
+.include fvf2.tran.par ; Parameter for the TRAN simulation
+.include fvf2.tran.net ; Circuit netlist
+
+.control
+ op
+ save v(in) v(out)
+ write $inputdir/fvf2.tran.op
+ tran $&tstep $&tstop $&tstart
+ let Vin=v(in)
+ let Vout=v(out)
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/fvf2.tran.dat Vin Vout
+.endc
+.end

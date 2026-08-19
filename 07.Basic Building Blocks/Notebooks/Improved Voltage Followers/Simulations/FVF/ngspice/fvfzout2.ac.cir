@@ -1,0 +1,21 @@
+Simulation of the flipped voltage follower with the EKV 2.6 model by C. Enz
+
+.include ekv018va.par ; model file for EKV2.6
+.include size_bias.par ; Size and bias values
+.include fvfzout2.ac.par ; Parameter for the AC simulation
+.include fvfzout2.net ; Circuit netlist
+
+.control
+ op
+ save v(3)
+ write $inputdir/fvfzout2.ac.op
+* reset all
+* ac dec 101 1k 10MEG
+ ac dec $&Ndec $&fmin $&fmax
+ let Youtmag=vm(3)
+ let Youtphdeg=180/PI*vp(3)
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/fvfzout2.ac.dat Youtmag Youtphdeg
+.endc
+.end

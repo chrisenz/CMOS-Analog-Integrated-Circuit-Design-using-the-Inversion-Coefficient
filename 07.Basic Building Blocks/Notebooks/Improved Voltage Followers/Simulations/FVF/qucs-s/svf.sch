@@ -1,0 +1,68 @@
+<Qucs Schematic 25.1.0>
+<Properties>
+  <View=-1177,-15,1880,1201,1.01809,0,0>
+  <Grid=10,10,1>
+  <DataSet=svf.dat>
+  <DataDisplay=svf.dpl>
+  <OpenDisplay=0>
+  <Script=svf.m>
+  <RunScript=0>
+  <showFrame=0>
+  <FrameText0=Simulation of the simple 5T OTA>
+  <FrameText1=Drawn By: Christian Enz>
+  <FrameText2=Date: 12.08.2025>
+  <FrameText3=Revision: 1>
+</Properties>
+<Symbol>
+  <.ID -20 -16 SUB>
+  <Line -20 20 40 0 #000080 2 1>
+  <Line 20 20 0 -40 #000080 2 1>
+  <Line -20 -20 40 0 #000080 2 1>
+  <Line -20 20 0 -40 #000080 2 1>
+</Symbol>
+<Components>
+  <SpiceInclude SpiceInclude1 1 50 40 -31 18 0 0 "ekv018va.par" 1 "size_bias.par" 1 "" 0 "" 0 "" 0>
+  <GND * 1 440 380 0 0 0 0>
+  <C CL 1 510 310 17 -26 0 1 "{CL}" 1 "" 0 "neutral" 0>
+  <.DC DC1 1 40 480 0 33 0 0 "26.85" 0 "0.001" 0 "1 pA" 0 "1 uV" 0 "yes" 0 "150" 0 "no" 0 "none" 0 "CroutLU" 0>
+  <MOS_SPICE M1 1 440 210 5 -20 0 0 "N" 0 "4" 0 "nmos" 0 "ekvn_va W={W1} L={L1}" 0 "" 0 "" 0 "" 0 "" 0>
+  <Vdc Vinq 1 220 280 18 -26 0 1 "{Vinq}" 1>
+  <Eqn Eqn1 1 70 930 -31 17 0 0 "Gain_dB=dB(out.v/in.v)" 1 "Phase=(cph(out.v)-cph(in.v))*180/pi-360" 1 "yes" 0>
+  <Vac Vin 1 270 210 -26 -50 1 0 "1" 1 "1 kHz" 0 "0" 0 "0" 0 "0" 0 "0" 0>
+  <.AC AC1 1 40 790 0 33 0 0 "log" 1 "100 kHz" 1 "1 GHz" 1 "607" 1 "no" 0>
+  <Vdc VDD 1 620 230 18 -26 0 1 "{VDD}" 1>
+  <.SW SW1 1 40 550 0 54 0 0 "DC1" 1 "lin" 1 "Vinq" 1 "0.55" 1 "1.5" 1 "101" 1>
+  <Idc Ib 1 440 310 18 -26 1 3 "{Ib}" 1>
+</Components>
+<Wires>
+  <440 360 440 380 "" 0 0 0 "">
+  <440 360 510 360 "" 0 0 0 "">
+  <440 340 440 360 "" 0 0 0 "">
+  <440 240 440 260 "" 0 0 0 "">
+  <510 260 510 280 "" 0 0 0 "">
+  <510 340 510 360 "" 0 0 0 "">
+  <440 260 440 280 "" 0 0 0 "">
+  <220 360 440 360 "" 0 0 0 "">
+  <220 310 220 360 "" 0 0 0 "">
+  <300 210 410 210 "in" 370 180 47 "">
+  <220 210 240 210 "" 0 0 0 "">
+  <220 210 220 250 "n2" 180 200 16 "">
+  <510 360 620 360 "" 0 0 0 "">
+  <620 260 620 360 "" 0 0 0 "">
+  <440 260 460 260 "" 0 0 0 "">
+  <460 260 510 260 "out" 520 230 28 "">
+  <460 210 460 260 "" 0 0 0 "">
+  <440 140 440 180 "" 0 0 0 "">
+  <440 140 620 140 "vdd" 570 110 101 "">
+  <620 140 620 200 "" 0 0 0 "">
+</Wires>
+<Diagrams>
+  <Rect 296 1003 333 223 3 #c0c0c0 1 10 1 1000 1 1e+09 1 nan 1 100 1 -1 0.5 1 315 0 225 1 1 0 "Frequency [Hz]" "Gain [dB]" "Phase [degre]">
+	<"ngspice/ac1.ac.gain_db" #ff0000 1 3 0 0 0>
+  </Rect>
+  <Rect 300 696 322 226 3 #c0c0c0 1 00 1 0.55 0.1 1 1 0.1 0.1 0.434041 1 -1 0.5 1 315 0 225 1 0 0 "Vin [V]" "Vout [V]" "">
+	<"ngspice/sw1.v(out)" #0000ff 1 3 0 0 0>
+  </Rect>
+</Diagrams>
+<Paintings>
+</Paintings>

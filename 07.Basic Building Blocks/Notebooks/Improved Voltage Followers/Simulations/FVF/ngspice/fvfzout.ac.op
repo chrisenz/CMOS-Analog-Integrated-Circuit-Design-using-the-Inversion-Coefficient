@@ -1,0 +1,29 @@
+Title: simulation of the flipped voltage follower with the ekv 2.6 model by c. enz
+Date: Tue Jul 21 14:09:22  2026
+Plotname: Operating Point
+Flags: real
+No. Variables: 10
+No. Points: 1
+Variables:
+	0	v(1)	voltage
+	1	v(2)	voltage
+	2	v(3)	voltage
+	3	i(h1)	current
+	4	v(in)	voltage
+	5	v(out)	voltage
+	6	i(vb)	current
+	7	v(vdd)	voltage
+	8	i(vdd)	current
+	9	i(vout)	current
+Values:
+ 0	5.092859445842225e-01
+	0.000000000000000e+00
+	0.000000000000000e+00
+	0.000000000000000e+00
+	7.800000000000000e-01
+	2.705920096295693e-01
+	0.000000000000000e+00
+	1.800000000000000e+00
+	-3.344000000000000e-06
+	0.000000000000000e+00
+

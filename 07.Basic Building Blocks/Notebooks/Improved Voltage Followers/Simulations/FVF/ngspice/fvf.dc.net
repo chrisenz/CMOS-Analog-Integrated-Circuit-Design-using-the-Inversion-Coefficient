@@ -1,0 +1,9 @@
+N1 1 in out out ekvn_va W={W1} L={L1}
+N2 out 1 0 0 ekvn_va W={W2} L={L2}
+N3a 2 2 vdd vdd ekvp_va W={W3} L={L3}
+N3b 1 2 vdd vdd ekvp_va W={W3} L={L3}
+CL out 0 {CL}
+VDD vdd 0 {VDD}
+Vin in 0 DC {Vinq} AC 1
+Ib 2 0 {Ib}
+

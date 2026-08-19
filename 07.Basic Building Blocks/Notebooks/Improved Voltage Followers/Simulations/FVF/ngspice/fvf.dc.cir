@@ -1,0 +1,17 @@
+Simulation of the FVF with the EKV 2.6 model by C. Enz
+
+.include ekv018va.par ; model file for EKV2.6
+.include size_bias3.par ; Size and bias values
+.include fvf.dc.par ; Parameter for the DC simulation
+.include fvf.dc.net ; Circuit netlist
+
+.control
+ op
+ dc Vin $&Vinmin $&Vinmax $&dVin
+ let Vin = v(in)
+ let Vout = v(out)
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/fvf.dc.dat Vin Vout
+.endc
+.end

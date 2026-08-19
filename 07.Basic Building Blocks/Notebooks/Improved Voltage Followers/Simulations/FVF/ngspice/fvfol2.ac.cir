@@ -1,0 +1,24 @@
+Simulation of the flipped voltage follower with the EKV 2.6 model by C. Enz
+
+.include ekv018va.par ; model file for EKV2.6
+.include size_bias2.par ; Size and bias values
+.include fvfol2.ac.par ; Parameter for the AC simulation
+.include fvfol2.net ; Circuit netlist
+
+.control
+ op
+ save v(2)
+ write $inputdir/fvfol2.ac.op
+ ac dec $&Ndec $&fmin $&fmax
+ let AmagdB=vdb(2)
+ let Aphdeg=180/PI*vp(2)
+ meas ac Adc max AmagdB
+ meas ac fp1 when Aphdeg=135
+ meas ac fp2 when Aphdeg=45
+ meas ac GBW when AmagdB=0
+ meas ac PGBW find Aphdeg at=GBW
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/fvfol2.ac.dat AmagdB Aphdeg
+.endc
+.end

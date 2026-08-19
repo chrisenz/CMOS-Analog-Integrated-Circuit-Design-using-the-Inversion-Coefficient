@@ -1,0 +1,15 @@
+N1 2 4 1 1 ekvn_va W={W1} L={L1}
+N2 1 in 0 0 ekvn_va W={W2} L={L2}
+N3 6 7 5 5 ekvn_va W={W1} L={L1}
+N4 5 6 0 0 ekvn_va W={W2} L={L2}
+CL 1 0 {CL}
+CGD2 2 1 {CGD2}
+CG2 2 0 {CG2}
+Cc 2 0 {Cc}
+VDD vdd 0 {VDD}
+Ib1 vdd 2 {Ib}
+Ib2 vdd 6 {Ib}
+Vb1 4 0 {Vinq}
+Vb2 7 0 {Vinq}
+Eb 3 0 6 0 1
+Vin in 3 DC 0 AC 1

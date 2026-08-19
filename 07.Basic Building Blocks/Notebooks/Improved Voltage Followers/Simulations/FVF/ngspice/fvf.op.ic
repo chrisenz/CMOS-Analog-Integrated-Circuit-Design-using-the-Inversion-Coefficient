@@ -1,0 +1,7 @@
+* Intermediate Transient Solution
+* Circuit: simulation of the flipped voltage follower with the ekv 2.6 model by c. enz
+* Recorded at simulation time: 0
+.ic v(1) = 0.509286
+.ic v(in) = 0.78
+.ic v(out) = 0.270592
+.ic v(vdd) = 1.8
