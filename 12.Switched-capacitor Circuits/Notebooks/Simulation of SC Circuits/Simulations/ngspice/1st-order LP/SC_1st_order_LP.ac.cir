@@ -1,0 +1,19 @@
+* First-order non-inverting SC LP Filter
+.include SC_1st_order_LP.net ; Circuit with 5th-order approximation of the delay element
+.include SC_1st_order_LP.par ; Parameters
+.include simulation.ac.par ; Parameter for the AC simulation
+
+*.param A=1E5 fck=200k T={1/fck} D=0.5
+*.param C=1p alpha=0.031416 C2={alpha*C} C3={alpha*C}
+
+.control
+ save v(out1)
+ save v(out2)
+ ac dec $&Ndec $&fmin $&fmax
+ let Hph1magdB=vdb(out1) 
+ let Hph2magdB=vdb(out2)
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/SC_1st_order_LP.ac.dat Hph1magdB Hph2magdB
+.endc
+.end

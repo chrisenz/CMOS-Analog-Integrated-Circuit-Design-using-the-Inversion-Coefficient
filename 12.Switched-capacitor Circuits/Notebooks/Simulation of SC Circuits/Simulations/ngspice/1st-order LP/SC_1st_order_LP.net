@@ -1,0 +1,98 @@
+* First-order non-inverting SC LP Filter
+XOA1 0 in1 out1 in2 out2 SOPAMPG Av_val={A}
+XSC1 out1 in1 out2 in2 SC C_val={C} fs_val={fs} D_val={D} delay_order={order}
+XSC2 0 in in2 0 SC C_val={C2} fs_val={fs} D_val={D} delay_order={order}
+XSC3 0 0 out2 in2 SC C_val={C3} fs_val={fs} D_val={D} delay_order={order}
+Vin in 0 DC 0 AC 1
+
+.subckt SC 1p1 2p1 1p2 2p2 C_val=1p fs_val=1MEG D_val=0.5 delay_order=5
+* SC capacitors of value C_val with sampling frequency fs_val
+* The circuit uses a transconductor of value Gmeq and delayed by DT=D*T
+* Because LAPLACE is not available in ngspice we use XSpice s_xfer
+* The latter implements a transfer function corresponding to a rational function in s
+* The function below implements a nth-order approximation of a constant delay exp(-s*DT)
+* The order is set by parameter delay_order
+.param Req={1/(fs_val*C_val)} Gmeq={1/Req}
+* Order 5
+.if(delay_order=5)
+.model delay1 s_xfer (
++ gain = {Gmeq}
++ int_ic = [0 0 0]
++ num_coeff = [-1 30 -420 3360 -15120 30240]
++ den_coeff = [1 30 420 3360 15120 30240]
++ denormalized_freq={fs_val/D_val} )
+.model delay2 s_xfer (
++ gain = {Gmeq}
++ int_ic = [0 0 0]
++ num_coeff = [-1 30 -420 3360 -15120 30240]
++ den_coeff = [1 30 420 3360 15120 30240]
++ denormalized_freq={fs_val/(1-D_val)} )
+* Order 4
+.elseif(delay_order=4)
+.model delay1 s_xfer (
++ gain = {Gmeq}
++ int_ic = [0 0 0]
++ num_coeff = [1 -20 180 -840 1680]
++ den_coeff = [1 20 180 840 1680]
++ denormalized_freq={fs_val/D_val} )
+.model delay2 s_xfer (
++ gain = {Gmeq}
++ int_ic = [0 0 0]
++ num_coeff = [1 -20 180 -840 1680]
++ den_coeff = [1 20 180 840 1680]
++ denormalized_freq={fs_val/(1-D_val)} )
+* Order 3
+.elseif(delay_order=3)
+.model delay1 s_xfer (
++ gain = {Gmeq}
++ int_ic = [0 0 0]
++ num_coeff = [-1 12 -60 120]
++ den_coeff = [1 12 60 120]
++ denormalized_freq={fs_val/D_val} )
+.model delay2 s_xfer (
++ gain = {Gmeq}
++ int_ic = [0 0 0]
++ num_coeff = [-1 12 -60 120]
++ den_coeff = [1 12 60 120]
++ denormalized_freq={fs_val/(1-D_val)} )
+* Order 2
+.elseif(delay_order=2)
+.model delay1 s_xfer (
++ gain = {Gmeq}
++ int_ic = [0 0 0]
++ num_coeff = [1 -6 12]
++ den_coeff = [1 6 12]
++ denormalized_freq={fs_val/D_val} )
+.model delay2 s_xfer (
++ gain = {Gmeq}
++ int_ic = [0 0 0]
++ num_coeff = [1 -6 12]
++ den_coeff = [1 6 12]
++ denormalized_freq={fs_val/(1-D_val)} )
+* Order 1
+.else
+.model delay1 s_xfer (
++ gain = {Gmeq}
++ int_ic = [0 0 0]
++ num_coeff = [-1 2]
++ den_coeff = [1 2]
++ denormalized_freq={fs_val/D_val} )
+.model delay2 s_xfer (
++ gain = {Gmeq}
++ int_ic = [0 0 0]
++ num_coeff = [-1 2]
++ den_coeff = [1 2]
++ denormalized_freq={fs_val/(1-D_val)} )
+.endif
+R1 1p1 2p1 {Req}
+A1 %vd 1p2 2p2 %id 2p1 1p1 delay1
+R2 1p2 2p2 {Req}
+A2 %vd 1p1 2p1 %id 2p2 1p2 delay2
+.ends SC
+
+.subckt SOPAMPG in+ in-p1 outp1 in-p2 outp2 Av_val=1e5
+E1 outp1 0 in+ in-p1 {Av_val}
+Ro1 outp1 0 1G
+E2 outp2 0 in+ in-p2 {Av_val}
+Ro2 outp2 0 1G
+.ends SOPAMPG

@@ -1,0 +1,17 @@
+Second-order SC LP Filter
+
+.include SC_2nd_order_LP.net ; Circuit with nth-order approximation of the delay element
+.include SC_2nd_order_LP.par ; Parameters
+.include simulation.ac.par ; Parameter for the AC simulation
+
+.control
+ save v(out1)
+ save v(out2)
+ ac dec $&Ndec $&fmin $&fmax
+ let Hph1magdB=vdb(out1) 
+ let Hph2magdB=vdb(out2)
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/SC_2nd_order_LP.ac.dat Hph1magdB Hph2magdB
+.endc
+.end

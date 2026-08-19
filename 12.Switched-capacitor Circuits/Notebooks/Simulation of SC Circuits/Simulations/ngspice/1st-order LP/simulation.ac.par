@@ -1,0 +1,3 @@
+.csparam fmin=1.000e+01
+.csparam fmax=1.000e+05
+.csparam Ndec=100

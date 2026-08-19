@@ -1,0 +1,2 @@
+.param A=1e+05 fs=200k T={1/fs} D=0.5 DT={D*T} order=5
+.param C=3.300p alpha=0.031416 C2={alpha*C} C3={alpha*C}

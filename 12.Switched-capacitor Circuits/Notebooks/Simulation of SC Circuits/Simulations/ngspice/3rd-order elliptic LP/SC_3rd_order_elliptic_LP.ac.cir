@@ -1,0 +1,23 @@
+Third-order elliptic SC LP Filter
+
+.include SC_3rd_order_elliptic_LP.net ; Circuit with nth-order approximation of the delay element
+.include SC_3rd_order_elliptic_LP.par ; Parameters
+.include simulation.ac.par ; Parameter for the AC simulation
+
+*.param A=100k fs= 2Meg a11=30.5867m a12=30.5867m a13=61.1733m b1=70.7775m a21=69.483m a22=69.483m a31=30.5867m a32=30.5867m b3=70.7775m
+*.param C1= 1p C11=a11*C1 C12=a12*C1 C13=a13*C1 C14=b1*C1
+*.param C2=C1 C21=a21*C2 C22=a22*C2
+*.param C3=C1 C31=a31*C3 C32=a32*C3 C33=b3*C3
+*.param k1= 1.29992 k2= 2.27899
+
+.control
+ save v(out1)
+ save v(out2)
+ ac dec $&Ndec $&fmin $&fmax
+ let Hph1magdB=vdb(out1) 
+ let Hph2magdB=vdb(out2)
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/SC_3rd_order_elliptic_LP.ac.dat Hph1magdB Hph2magdB
+.endc
+.end
