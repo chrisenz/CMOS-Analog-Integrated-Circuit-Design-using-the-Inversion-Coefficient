@@ -1,0 +1,2 @@
+.param CL=20.00f W1=2.85u L1=1.00u AD1=1.15e-12 PD1=6.57e-06
+.param VDD=1.8 Ib=600n

@@ -1,0 +1,26 @@
+* Qucs 25.1.0  M:/My Drive/Book on Low-power Analog IC Design/Current/07.Basic Building Blocks/Quarto/CS OL Optimization/Simulations/qucs-s/Optimization for GBW/CS_GBW.sch
+.INCLUDE "C:/Program Files/Qucs-S/share/qucs-s/xspice_cmlib/include/ngspice_mathfunc.inc"
+.INCLUDE "M:/My Drive/Book on Low-power Analog IC Design/Current/07.Basic Building Blocks/Quarto/CS OL Optimization/Simulations/qucs-s/Optimization for GBW/ekv018va.par"
+.INCLUDE "M:/My Drive/Book on Low-power Analog IC Design/Current/07.Basic Building Blocks/Quarto/CS OL Optimization/Simulations/qucs-s/Optimization for GBW/size_bias.par"
+CL 0 out  {CL} 
+NM1 out  in  0  0 ekvn_va W={W1} L={L1}
+Vin in n2 DC 0 SIN(0 1 1K 0 0 0) AC 1 ACPHASE 0
+ESRC1 n2 0 n1 0 1
+NM2 n1  n1  0  0 ekvn_va W={W1} L={L1}
+Ib1 vdd out DC {IB}
+Ib2 vdd n1 DC {IB}
+VDD vdd 0 DC {VDD}
+
+
+.control
+
+ac dec 87 1k 10g 
+let Gain_dB=dB(V(out)/V(in))
+let Phase=(cph(V(out))-cph(V(in)))*180/pi
+write spice4qucs.ac1.plot v(in) v(n1) v(n2) v(out) v(vdd) Gain_dB Phase
+destroy all
+reset
+
+exit
+.endc
+.END
