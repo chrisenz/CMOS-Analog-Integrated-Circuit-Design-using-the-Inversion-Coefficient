@@ -1,0 +1,9 @@
+* Intermediate Transient Solution
+* Circuit: simulation of the simple ota designed with the ekv 2.6 model
+* Recorded at simulation time: 0
+.ic v(2) = 1.26614
+.ic v(inp) = 0.3
+.ic v(1) = 0.0094049
+.ic v(out) = 0.300542
+.ic v(vdd) = 1.8
+.ic v(3) = 0.782437

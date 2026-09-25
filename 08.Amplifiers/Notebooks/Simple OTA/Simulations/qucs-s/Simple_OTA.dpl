@@ -1,0 +1,38 @@
+<Qucs Schematic 25.1.0>
+<Properties>
+  <View=-229,60,1578,779,1.72184,0,0>
+  <Grid=10,10,0>
+  <DataSet=Simple_OTA.dat>
+  <DataDisplay=Simple_OTA.sch>
+  <OpenDisplay=0>
+  <Script=Simple_OTA.m>
+  <RunScript=0>
+  <showFrame=0>
+  <FrameText0=Title>
+  <FrameText1=Drawn By:>
+  <FrameText2=Date:>
+  <FrameText3=Revision:>
+</Properties>
+<Symbol>
+</Symbol>
+<Components>
+</Components>
+<Wires>
+</Wires>
+<Diagrams>
+  <Rect 770 355 332 245 3 #c0c0c0 1 00 1 -0.0004 0.0002 0.0004 0 0.6 0.1 1.4 1 -1 0.5 1 315 0 225 0 0 0 "Vid [V]" "Vout [V]" "">
+	<"ngspice/sw2.v(out)@sw2.v(v-sweep)" #ff0000 2 3 0 0 0>
+  </Rect>
+  <Rect 764 691 337 241 3 #c0c0c0 1 11 1 1 1 1e+08 1 1e-08 1 0.0001 1 -1 0.5 1 315 0 225 1 0 0 "Frequency [Hz]" "Input Referred Noise [V/sqrt(Hz)]" "">
+	<"ngspice/noise1.ac.inoise_spectrum@noise1.frequency" #0000ff 2 3 0 0 0>
+  </Rect>
+  <Rect 290 345 332 245 3 #c0c0c0 1 00 0 -0.9 0.1 0.9 0 0 0.2 1.8 1 -1 0.5 1 315 0 225 0 0 0 "Vid [V]" "Vout [V]" "">
+	<"ngspice/sw1.v(out)@sw1.v(v-sweep)" #ff0000 2 3 0 0 0>
+  </Rect>
+  <Rect 276 706 342 246 3 #c0c0c0 1 10 1 0 1 0 1 nan 0.5 1 0 -180 45 0 315 0 225 1 1 0 "Frequency [Hz]" "Gain [dB]" "Phase [degre]">
+	<"ngspice/ac1.ac.gain_db@ac1.frequency" #ff0000 2 3 0 0 0>
+	<"ngspice/ac1.ac.phase" #0000ff 2 3 0 0 1>
+  </Rect>
+</Diagrams>
+<Paintings>
+</Paintings>
