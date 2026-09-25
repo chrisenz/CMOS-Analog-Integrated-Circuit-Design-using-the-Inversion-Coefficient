@@ -1,6 +1,6 @@
 # Design of the Symmetrical Cascode OTA
 
-![Schematic of the symmetrical cascode OTA.](/08.Amplifiers/Notebooks/Symmetrical%20OTA/Figures/Symmetrical_OTA_schematic.svg)
+![Schematic of the symmetrical cascode OTA.](/08.Amplifiers/Notebooks/Symmetrical%20OTA/Figures/Symmetrical_OTA_schematic.png)
 
 This notebook presents the analysis, design and simulation of the symmetrical cascode OTA shown above.
 
