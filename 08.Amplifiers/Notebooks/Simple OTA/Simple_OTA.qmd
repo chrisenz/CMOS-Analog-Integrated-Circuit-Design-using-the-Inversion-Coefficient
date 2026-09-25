@@ -21,7 +21,7 @@ csl: ieee.csl
 code-links:
   - text: Notebook code
     icon: github
-    href: https://github.com/chrisenz/CMOS-Analog-Integrated-Circuit-Design-using-the-Inversion-Coefficient/upload/main/08.Amplifiers/Notebooks/Simple%20OTA
+    href: https://github.com/chrisenz/CMOS-Analog-Integrated-Circuit-Design-using-the-Inversion-Coefficient/tree/main/08.Amplifiers/Notebooks/Simple%20OTA
 format: 
   html:
     include-in-header: mathjax.html
