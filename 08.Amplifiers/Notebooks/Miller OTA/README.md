@@ -1,6 +1,6 @@
 # Design of the Miller OTA
 
-![Schematic of the symmetrical cascode OTA.](/08.Amplifiers/Notebooks/Symmetrical%20OTA/Figures/Symmetrical_OTA_schematic.png)
+![Schematic of the Miller OTA.](/08.Amplifiers/Notebooks/Miller%20OTA/Figures/Miller_OTA_schematic.png)
 
 This notebook presents the analysis, design and simulation of the Miller OTA shown above.
 
