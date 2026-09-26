@@ -1,0 +1,14 @@
+* Intermediate Transient Solution
+* Circuit: simulation of the miller ota designed with the ekv 2.6 model by c. enz
+* Recorded at simulation time: 0
+.ic v(4) = 0.949216
+.ic v(inn) = 0.9
+.ic v(3) = 0.39263
+.ic v(1) = 0.949216
+.ic v(inp) = 0.9
+.ic v(out) = 1.78623
+.ic v(vdd) = 1.8
+.ic v(5) = 0.788552
+.ic v(6) = 0.873886
+.ic v(ic) = 0.9
+.ic v(id) = 0
