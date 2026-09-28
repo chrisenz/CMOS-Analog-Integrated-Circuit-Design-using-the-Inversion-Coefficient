@@ -1,6 +1,6 @@
 # Design of the Telescopic OTA
 
-![Schematic of the Miller OTA.](/08.Amplifiers/Notebooks/Telescopic%20OTA/Figures/Telescopic_OTA_schematic.png)
+![Schematic of the Miller OTA.](/08.Amplifiers/Notebooks/Telescopic%20OTA/Figures/Telescopic_ota_schematic.png)
 
 This notebook presents the analysis, design and simulation of the telescopic OTA shown above.
 
