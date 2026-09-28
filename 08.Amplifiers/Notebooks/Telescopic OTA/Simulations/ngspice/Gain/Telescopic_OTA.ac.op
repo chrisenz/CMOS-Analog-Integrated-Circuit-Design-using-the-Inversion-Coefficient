@@ -1,0 +1,55 @@
+Title: simulation of the telescopic ota designed with the ekv 2.6 model by c. enz
+Date: Mon Sep 28 16:53:30  2026
+Plotname: Operating Point
+Flags: real
+No. Variables: 23
+No. Points: 1
+Variables:
+	0	v(3)	voltage
+	1	v(1)	voltage
+	2	v(2)	voltage
+	3	v(4)	voltage
+	4	v(5)	voltage
+	5	v(6)	voltage
+	6	v(7)	voltage
+	7	v(8)	voltage
+	8	i(einn)	current
+	9	i(einp)	current
+	10	v(ic)	voltage
+	11	v(id)	voltage
+	12	v(inn)	voltage
+	13	v(inp)	voltage
+	14	v(out)	voltage
+	15	v(vb1)	voltage
+	16	i(vb1)	current
+	17	v(vb2)	voltage
+	18	i(vb2)	current
+	19	v(vdd)	voltage
+	20	i(vdd)	current
+	21	i(vic)	current
+	22	i(vid)	current
+Values:
+ 0	6.233102777639241e-01
+	4.030667024279366e-01
+	8.794266921240101e-01
+	6.234016646328655e-01
+	1.268556168276724e+00
+	1.268601717451879e+00
+	7.773242169130177e-01
+	3.548242169130174e-01
+	0.000000000000000e+00
+	0.000000000000000e+00
+	9.000000000000000e-01
+	1.360000000000000e-07
+	8.999999320000001e-01
+	9.000000680000000e-01
+	8.999930014195741e-01
+	1.200000000000000e+00
+	0.000000000000000e+00
+	7.000000000000000e-01
+	0.000000000000000e+00
+	1.800000000000000e+00
+	-1.000651155309443e-06
+	0.000000000000000e+00
+	0.000000000000000e+00
+
