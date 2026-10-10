@@ -1,6 +1,6 @@
 # sEKV Parameter Extraction for a Generic 180 nm Process
 
-In this directory you will find all the scripts that help to extract the sEKV parameters for a generic 180nm bulk CMOS process.
+In this directory you will find all the scripts that help to extract the sEKV parameters for a generic 180nm bulk CMOS process. These extracted parameters are used for all the examples in the book.
 
 The sEKV parameters include:
 
