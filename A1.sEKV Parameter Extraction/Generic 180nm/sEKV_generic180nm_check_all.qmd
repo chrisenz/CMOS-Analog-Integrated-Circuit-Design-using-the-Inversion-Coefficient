@@ -1,0 +1,931 @@
+---
+title: sEKV Parameter Extraction for the Generic 180nm Process
+subtitle: Check extraction result on nMOS and pMOS of various sizes (Version 1)
+affiliation: EPFL
+date: 10/02/2026
+date-modified: last-modified
+date-format: "DD.MM.YYYY"
+license: CC BY-NC-SA
+abstract: |
+  In this notebook we check the sEKV parameters for nMOS and pMOS transistors of different sizes. We use data generated with the EKV 2.6 compact model for a generic 180nm CMOS process.
+execute:
+  echo: false
+  warning: false
+toc: true
+number-sections: true
+number-depth: 4
+highlight-style: pygments
+bibliography: references.bib
+csl: ieee.csl
+code-links:
+  - text: Notebook code
+    icon: github
+    href: https://github.com/chrisenz/CMOS-Analog-Integrated-Circuit-Design-using-the-Inversion-Coefficient/blob/main/A1.sEKV%20Parameter%20Extraction/Generic%20180nm/
+format: 
+  html:
+    include-in-header: mathjax.html
+    code-fold: true
+    html-math-method: mathjax
+    css: styles.css
+    default-image-extension: svg
+  pdf:
+    keep-tex: true
+    pdf-engine: pdflatex
+    documentclass: scrreprt
+    papersize: a4
+    default-image-extension: pdf
+    geometry:
+      - top=20mm
+      - bottom=20mm
+      - left=20mm
+      - right=20mm
+    include-in-header:
+      text: |
+        \usepackage{scrlayer-scrpage}
+        \usepackage{datetime2}
+        \DTMsetup{datesep=.}
+        \DTMsetstyle{ddmmyyyy}
+        \rohead[\thepage]{\thepage}
+        \cohead[sEKV Parameter Extraction for a Generic 180nm Process]{sEKV Parameter Extraction for a Generic 180nm Process}
+        \lofoot[$\copyright$ C. Enz under CC BY-NC-SA]{$\copyright$ C. Enz under CC BY-NC-SA}
+        \cofoot[]{}
+        \rofoot[\today]{\today}
+---
+
+
+```{python}
+# Initialization
+
+from ekv_functions import *
+from constants import *
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import subprocess
+import shutil
+import os
+import os.path as op
+import sys
+sys.path.append(".")
+import re
+
+from IPython.display import Markdown
+from tabulate import tabulate
+
+plt.rcParams['svg.fonttype'] = 'none'
+plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams['font.family'] = 'Arial'
+plt.rcParams['mathtext.fontset'] = 'custom'
+plt.rcParams['mathtext.rm'] = 'Arial'
+plt.rcParams['mathtext.it'] = 'Arial:italic'
+plt.rcParams['mathtext.bf'] = 'Arial:bold'
+
+inkscapePath = r"C:\\Program Files\\Inkscape\bin\\inkscape.exe"
+savePlotPath = "./Plots/"
+#savePlots=True
+savePlots=False
+
+lw=1
+curvelw=1
+msize=4
+mevery=4
+textFontSize=9
+BodePlotParams = {'figure.figsize': (5,5)}
+twoSidebySidePlotsParams = {'figure.figsize': (7, 2.7)}
+pltStyle='plt_style_small.mplstyle'
+plt.style.use(pltStyle)
+
+#newSim=True
+newSim=False
+refloat=r'.*?([+-]?\d+([.]\d*)?([eE][+-]?\d+)?|[.]\d+([eE][+-]?\d+)?)'
+
+def saveFigures(savePath, plotName):
+#  print("Patience, saving plot!")
+  figFolder = savePath + r"\\{}.{}"
+  pngFile = figFolder.format(plotName,"png")
+  pdfFile = figFolder.format(plotName,"pdf")
+  svgFile = figFolder.format(plotName,"svg")
+  plt.savefig(pngFile, format="png", dpi=1200, bbox_inches="tight", transparent=True)
+  plt.savefig(pdfFile, format="pdf", dpi=1200, bbox_inches="tight", transparent=True)
+  plt.savefig(svgFile, format="svg", dpi=1200, bbox_inches="tight", transparent=True)
+  cmd_emf = '"{}" "{}\\{}.svg" --export-filename="{}\\{}.emf" --export-overwrite'.format(inkscapePath, savePath, plotName, savePath, plotName)
+#    cmd_emf = '"{}" "{}\{}.pdf" --export-filename="{}\{}.emf" --export-overwrite'.format(inkscapePath, savePath, plotName, savePath, plotName)
+#    cmd_pdf = '"{}" "{}\{}.svg" --export-filename="{}\{}.pdf" --export-overwrite'.format(inkscapePath, savePath, plotName, savePath, plotName)
+  subprocess.call(cmd_emf, shell=True)
+#    subprocess.call(cmd_pdf, shell=True)
+
+def diff(y, dx):
+    N=len(y)
+    dydx=np.zeros(N)
+    dydx[0]=(y[1]-y[0])/dx
+    dydx[1]=(y[2]-y[0])/(2*dx)
+    for k in range(2,N-2):
+        dydx[k]=(y[k-2]-8*y[k-1]+8*y[k+1]-y[k+2])/(12*dx)
+    dydx[N-2]=(y[N-1]-y[N-3])/(2*dx)
+    dydx[N-1]=(y[N-1]-y[N-2])/dx
+    return dydx
+```
+
+# Introduction
+
+```{python}
+type='nmos'
+tYPE='nMOS'
+Type='nMOS'
+
+W=10e-6
+L1=10e-6
+L2=1e-6
+L3=0.18e-6
+```
+
+In this notebook we will compare the sEKV model and the simulations with the EKV 2.6 compact model for 3 nMOS and pMOS transistors having all the same width $W =$ `{python} f'{W/1e-6:.0f}'` $\mu m$ and different lengths $L =$ `{python} f'{L1/1e-6:.0f}'` $\mu m$, `{python} f'{L2/1e-6:.0f}'` $\mu m$ and `{python} f'{L3/1e-9:.0f}'` $nm$. For the sEKV model we will use the parameters that have been extracted for `{python} f'{tYPE}'` transistors for a generic 180nm bulk CMOS process. The physical parameters are given in @tbl-physics_param, the global process parameters in @tbl-process_param and the transistor parameters are given in @tbl-mos_param.
+
+```{python}
+#| label: tbl-physics_param
+#| tbl-cap: Physical parameters
+
+from generic018_sekv_param import *
+
+table = [["$T$",f'{T:.0f}',"$K$"],
+         ["$U_T$",f'{UT/1e-3:.3f}',"$mV$"]
+         ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+```{python}
+#| label: tbl-process_param
+#| tbl-cap: Global process parameters
+
+table = [["$V_{DD}$",f'{VDD:.1f}',"$V$"],
+         ["$C_{ox}$",f'{Cox*1e3:.3f}',"$\\frac{fF}{\\mu m^2}$"],
+         ["$W_{min}$",f'{Wmin/1e-9:.0f}',"$nm$"],
+         ["$L_{min}$",f'{Lmin/1e-9:.0f}',"$nm$"]
+         ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","Value","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+```{python}
+#| label: tbl-mos_param
+#| tbl-cap: Transistor process parameters
+
+table = [["sEKV parameters"],
+         ["$n$",f'{n0n:.2f}',f'{n0p:.2f}',"-"],
+         ["$I_{{spec\\Box}}$",f'{Ispecsqn/1e-9:.0f}',f'{Ispecsqp/1e-9:.0f}',"$nA$"],
+         ["$V_{{T0}}$",f'{VT0n:.3f}',f'{VT0p:.3f}',"$V$"],
+         ["$L_{{sat}}$",f'{Lsatn/1e-9:.0f}',f'{Lsatp/1e-9:.0f}',"$nm$"],
+         ["$\\lambda$",f'{lambdan*1e-6:.0f}',f'{lambdap*1e-6:.0f}',"$\\frac{{V}}{{\\mu m}}$"],
+         ["Overlap capacitances parameters"],
+         ["$C_{{GDo}}$",f'{CGDOn*1e9:.3f}',f'{CGDOp*1e9:.3f}','$\\frac{{fF}}{{\\mu m}}$'],
+         ["$C_{{GSo}}$",f'{CGSOn*1e9:.3f}',f'{CGSOp*1e9:.3f}','$\\frac{{fF}}{{\\mu m}}$'],
+         ["$C_{{GBo}}$",f'{CGBOn*1e9:.3f}',f'{CGBOp*1e9:.3f}','$\\frac{{fF}}{{\\mu m}}$'],
+         ["Junction capacitances parameters"],
+         ["$C_J$",f'{CJn*1e3:.3f}',f'{CJp*1e3:.3f}','$\\frac{{fF}}{{\\mu m^2}}$'],
+         ["$C_{{JSW}}$",f'{CJSWn*1e9:.3f}',f'{CJSWp*1e9:.3f}','$\\frac{{fF}}{{\\mu m}}$'],
+         ["Flicker noise parameters"],
+         ["$K_F$",f'{KFn:.1e}',f'{KFp:.1e}',"$J$"],
+         ["$AF$",f'{AFn:.1f}',f'{AFp:.1f}',"-"],
+         ["$\\rho$",f'{rhon:.3e}',f'{rhop:.3e}','$\\frac{{V \\cdot m^2}}{{A \\cdot s}}$'],
+         ["Matching parameters"],
+         ["$A_{{VT}}$",f'{AVTn*1e9:.0f}',f'{AVTp*1e9:.0f}',"$mV \\cdot \\mu m$"],
+         ["$A_{{\\beta}}$",f'{Abetan*1e8:.0f}',f'{Abetap*1e8:.0f}',"$\\% \\cdot \\mu m$"],
+         ["Source and drain sheet resistance parameter"],
+         ["$R_{{sh}}$",f'{RSHn:.0f}',f'{RSHp:.0f}',"$\\frac{{\\Omega}}{{\\mu m}}$"],
+         ["Width and length parameters"],
+         ["$\\Delta W$",f'{DWn/1e-9:.0f}',f'{DWp/1e-9:.0f}',"$\\,nm$"],
+         ["$\\Delta L$",f'{DLn/1e-9:.0f}',f'{DLp/1e-9:.0f}',"$\\,nm$"]
+         ]
+
+Markdown(tabulate(
+  table,
+  headers=["Parameter","NMOS","PMOS","Unit"],
+  numalign="center",
+  stralign="center",
+  colalign=("center", "center", "center")
+))
+```
+
+# nMOS
+## $IC$ versus $V_G-V_{T0}$
+
+```{python}
+simulationPath="./Simulations/" + type + "/idgmvg/"
+dataPath="./Data/" + type + "/"
+fileName = "idgmvg_all"
+dataFile = dataPath + fileName + "_" + type + ".dat"
+paramFile = simulationPath + fileName + ".par"
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+VG=1
+VS=0
+VD=1.8
+
+Npts=1001
+VGmin=-0.5
+VGmax=2
+dVG=(VGmax-VGmin)/(Npts-1)
+
+if newSim:
+    paramstr = '\n'.join((
+      f'.param W1={W/1e-6:.2f}u L1={L1/1e-6:.2f}u',
+      f'.param W2={W/1e-6:.2f}u L2={L2/1e-6:.2f}u',
+      f'.param W3={W/1e-6:.2f}u L3={L3/1e-6:.2f}u',
+      f'.param VG={VG:.1f} VS={VS:.1f} VD={VD:.1f}',
+      f'.csparam VGmin = {VGmin:.3f}',
+      f'.csparam VGmax = {VGmax:.3f}',
+      f'.csparam dVG = {dVG:.3f}'
+    ))
+    # print(paramstr)
+    with open(paramFile, 'w') as f:
+        f.write(paramstr)
+    # print('Starting ngspice simulation...\n')
+    result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+    # We copy the simulation results to the data folder
+    shutil.copy2(simulationData, dataFile)
+```
+
+```{python}
+#| label: fig-id_vgt_nmos
+#| fig-cap: $IC$ versus $V_G-V_{T0}$ of the sEKV model compared to simulations with EKV 2.6 for three different lengths.
+
+df_idgmvg=pd.read_table(dataFile, sep=' +', engine='python')
+VG=df_idgmvg['v-sweep'].to_numpy()
+ID1sim=df_idgmvg['ID1'].to_numpy()
+ID2sim=df_idgmvg['ID2'].to_numpy()
+ID3sim=df_idgmvg['ID3'].to_numpy()
+Gm1sim=df_idgmvg['Gm1'].to_numpy()
+Gm2sim=df_idgmvg['Gm2'].to_numpy()
+Gm3sim=df_idgmvg['Gm3'].to_numpy()
+
+Npts=len(VG)
+VGmin=VG[0]
+VGmax=VG[Npts-1]
+
+Weff=W+DWn
+Leff1=L1+DLn
+Leff2=L2+DLn
+Leff3=L3+DLn
+Ispec1=Ispecsqn*Weff/Leff1
+Ispec2=Ispecsqn*Weff/Leff2
+Ispec3=Ispecsqn*Weff/Leff3
+lambdac1=Lsatn/Leff1
+lambdac2=Lsatn/Leff2
+lambdac3=Lsatn/Leff3
+
+nUT=n0n*UT
+VT0=VT0n
+#VT0=0.47
+
+Npts=len(VG)
+logICmin=-3
+logICmax=3
+ICmin=pow(10,logICmin)
+ICmax=pow(10,logICmax)
+ICmod=np.logspace(logICmin,logICmax,Npts,endpoint=True,base=10.0)
+VGT=np.zeros(Npts)
+vps=np.zeros(Npts)
+id1sim=np.zeros(Npts)
+id2sim=np.zeros(Npts)
+id3sim=np.zeros(Npts)
+id1mod=np.zeros(Npts)
+id2mod=np.zeros(Npts)
+id3mod=np.zeros(Npts)
+gms1sim=np.zeros(Npts)
+gms2sim=np.zeros(Npts)
+gms3sim=np.zeros(Npts)
+gms1mod=np.zeros(Npts)
+gms2mod=np.zeros(Npts)
+gms3mod=np.zeros(Npts)
+gmsid1sim=np.zeros(Npts)
+gmsid2sim=np.zeros(Npts)
+gmsid3sim=np.zeros(Npts)
+gmsid1mod=np.zeros(Npts)
+gmsid2mod=np.zeros(Npts)
+gmsid3mod=np.zeros(Npts)
+
+for k in range(0,Npts):
+  id1sim[k]=ID1sim[k]/Ispec1
+  id2sim[k]=ID2sim[k]/Ispec2
+  id3sim[k]=ID3sim[k]/Ispec3
+  VGT[k]=VG[k]-VT0
+  vps[k]=VGT[k]/nUT
+  id1mod[k]=ic_vps_short(vps[k],lambdac1)
+  id2mod[k]=ic_vps_short(vps[k],lambdac2)
+  id3mod[k]=ic_vps_short(vps[k],lambdac3)
+  gms1sim[k]=Gm1sim[k]*nUT/Ispec1
+  gms2sim[k]=Gm2sim[k]*nUT/Ispec2
+  gms3sim[k]=Gm3sim[k]*nUT/Ispec3
+  gms1mod[k]=gms_ic_short(id1mod[k],lambdac1)
+  gms2mod[k]=gms_ic_short(id2mod[k],lambdac2)
+  gms3mod[k]=gms_ic_short(id3mod[k],lambdac3)
+  gmsid1sim[k]=Gm1sim[k]*nUT/ID1sim[k]
+  gmsid2sim[k]=Gm2sim[k]*nUT/ID2sim[k]
+  gmsid3sim[k]=Gm3sim[k]*nUT/ID3sim[k]
+  gmsid1mod[k]=gmsid_ic_short(id1mod[k],lambdac1)
+  gmsid2mod[k]=gmsid_ic_short(id2mod[k],lambdac2)
+  gmsid3mod[k]=gmsid_ic_short(id3mod[k],lambdac3)
+
+fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(8, 3), constrained_layout=True)
+
+axs[0].semilogy(VGT, id1sim, 'ro', markersize=2, markevery=8)
+axs[0].semilogy(VGT, id1mod, 'r-')
+axs[0].semilogy(VGT, id2sim, 'bD', markersize=2, markevery=8)
+axs[0].semilogy(VGT, id2mod, 'b-')
+axs[0].semilogy(VGT, id3sim, 'gs', markersize=3, markevery=8)
+axs[0].semilogy(VGT, id3mod, 'g-')
+axs[0].set_xlabel('$|V_G-V_{T0}|$ [V]')
+axs[0].set_xlim(-0.2,0.8)
+#axs[0].set_xticks(np.arange(-0.5,2.5,0.5))
+axs[0].set_ylabel('$IC$ [-]')
+axs[0].set_ylim(1e-3,1e3)
+#axs[0].legend(loc='upper left')
+mosinfo = '\n'.join((
+  Type,
+  f'$V_{{T0}} =$ {VT0n/1e-3:.1f} $mV$',
+  f'$n =$ {n0n:.2f}',
+  f'$I_{{specsq}} =$ {Ispecsqn/1e-9:.0f} $nA$',
+  f'$L_{{sat}} =$ {Lsatn/1e-9:.0f} $nA$',
+  f'$\\lambda =$ {lambdan/1e6:.0f} $V/\\mu m$'))
+axs[0].text(0.65, 0.05, mosinfo, ha='left', va='bottom', transform=axs[0].transAxes, size=9,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].plot(VGT, id1sim, 'ro', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L1/1e-6:.0f} $\\mu m$', markersize=2, markevery=8)
+axs[1].plot(VGT, id1mod, 'r-')
+axs[1].plot(VGT, id2sim, 'bD', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L2/1e-6:.0f} $\\mu m$', markersize=2, markevery=8)
+axs[1].plot(VGT, id2mod, 'b-')
+axs[1].plot(VGT, id3sim, 'gs', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L3/1e-9:.0f} $nm$', markersize=3, markevery=8)
+axs[1].plot(VGT, id3mod, 'g-')
+axs[1].set_xlabel('$|V_G-V_{T0}|$ [V]')
+axs[1].set_xlim(-0.2,0.8)
+#axs[1].set_xticks(np.arange(-0.5,2.5,0.5))
+axs[1].set_ylabel('$IC$ [-]')
+axs[1].set_ylim(0,150)
+axs[1].legend(loc='upper left')
+#axs[1].legend(loc='center left', bbox_to_anchor=(1, 0.5))
+#axs[1].text(0.7, 0.05, mosinfo, ha='left', va='bottom', transform=axs[1].transAxes, size=9,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.show()
+```
+
+The fit is good in weak and moderate inversion for the short and long transistor, however the medium is off (threshold voltage too large). The fit in strong inversion is good for the minimum length transistor but is a bit off for the long and medium channel transistors. This is certainly due to the mobility reduction due to the vertical field which is not accounted for in sEKV.
+
+## $G_m$ and $G_m/I_D$ versus $IC$
+
+```{python}
+#| label: fig-gm_id_nmos
+#| fig-cap: $g_{ms}$ and $g_{ms}/i_d$ versus $IC$ of the sEKV model compared to simulations with EKV 2.6 for three different lengths.
+
+fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(8, 3), constrained_layout=True)
+
+axs[0].loglog(id1sim, gms1sim, 'ro', markersize=2, markevery=8)
+axs[0].loglog(id1mod, gms1mod, 'r-')
+axs[0].loglog(id2sim, gms2sim, 'bD', markersize=2, markevery=8)
+axs[0].loglog(id2mod, gms2mod, 'b-')
+axs[0].loglog(id3sim, gms3sim, 'gs', markersize=3, markevery=8)
+axs[0].loglog(id3mod, gms3mod, 'g-')
+axs[0].set_xlabel('$IC$ [-]')
+axs[0].set_xlim(1e-2, 1e2)
+#axs[0].set_xticks(np.arange(-0.5,2.5,0.5))
+axs[0].set_ylabel('$g_{ms}$ [-]')
+axs[0].set_ylim(1e-2,1e1)
+#axs[0].legend(loc='upper left')
+axs[0].text(0.65, 0.05, mosinfo, ha='left', va='bottom', transform=axs[0].transAxes, size=9,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].loglog(id1sim, gmsid1sim, 'ro', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L1/1e-6:.0f} $\\mu m$', markersize=2, markevery=8)
+axs[1].loglog(id1mod, gmsid1mod, 'r-')
+axs[1].loglog(id2sim, gmsid2sim, 'bD', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L2/1e-6:.0f} $\\mu m$', markersize=2, markevery=8)
+axs[1].loglog(id2mod, gmsid3mod, 'b-')
+axs[1].loglog(id3sim, gmsid3sim, 'gs', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L3/1e-9:.0f} $nm$', markersize=3, markevery=8)
+axs[1].loglog(id3mod, gmsid3mod, 'g-')
+axs[1].set_xlabel('$IC$ [-]')
+axs[1].set_xlim(1e-2, 1e2)
+#axs[1].set_xticks(np.arange(-0.5,2.5,0.5))
+axs[1].set_ylabel('$g_{ms}/i_d$ [-]')
+axs[1].set_ylim(1e-2, 2)
+axs[1].legend(loc='lower left')
+#axs[1].legend(loc='center left', bbox_to_anchor=(1, 0.5))
+#axs[1].text(0.7, 0.05, mosinfo, ha='left', va='bottom', transform=axs[1].transAxes, size=9,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.show()
+```
+
+The fit is good in weak and moderate inversion for all lengths. The fit is good in strong inversion for the minimum length transistor, buta bit off for the long and medium length transistors. This is again due to the mobility reduction due to the vertical field which has an impact on $g_{ms}$ and $g_{ms}/IC$.
+
+## $G_{ds}$ versus $V_D$
+
+```{python}
+simulationPath="./Simulations/" + type + "/idgdsvd/"
+dataPath="./Data/" + type + "/"
+fileName = "idgdsvd_all"
+dataFile = dataPath + fileName + "_" + type + ".dat"
+paramFile = simulationPath + fileName + ".par"
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+IC=1
+vps=vps_ic(IC)
+nUT=n0n*UT
+VG=VT0n+nUT*vps
+
+Npts=1001
+VDmin=0
+VDmax=1
+dVD=(VDmax-VDmin)/(Npts-1)
+
+if newSim:
+    paramstr = '\n'.join((
+      f'.param W1={W/1e-6:.2f}u L1={L1/1e-6:.2f}u',
+      f'.param W2={W/1e-6:.2f}u L2={L2/1e-6:.2f}u',
+      f'.param W3={W/1e-6:.2f}u L3={L3/1e-6:.2f}u',
+      f'.param VG={VG:.1f} VS={VS:.1f} VD={VD:.1f}',
+      f'.csparam VDmin = {VDmin:.3f}',
+      f'.csparam VDmax = {VDmax:.3f}',
+      f'.csparam dVD = {dVD:.3f}'
+    ))
+    #print(paramstr)
+    with open(paramFile, 'w') as f:
+        f.write(paramstr)
+    # print('Starting ngspice simulation...\n')
+    result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+    # We copy the simulation results to the dat folder
+    shutil.copy2(simulationData, dataFile)
+```
+
+```{python}
+#| label: fig-id_vd_nmos
+#| fig-cap: Approximation of the output conductance in saturation for three different lengths.
+
+df_idgdsvd=pd.read_table(dataFile, sep=' +', engine='python')
+VD=df_idgdsvd['v-sweep'].to_numpy()
+ID1sim=df_idgdsvd['ID1'].to_numpy()
+ID2sim=df_idgdsvd['ID2'].to_numpy()
+ID3sim=df_idgdsvd['ID3'].to_numpy()
+Gds1sim=df_idgdsvd['Gds1'].to_numpy()
+Gds2sim=df_idgdsvd['Gds2'].to_numpy()
+Gds3sim=df_idgdsvd['Gds3'].to_numpy()
+
+Npts=len(VD)
+VDmin=VD[0]
+VDmax=VD[Npts-1]
+
+Gspec1=Ispec1/UT
+ID10=Ispec1*IC
+VM1=lambdan*Leff1
+Gds1mod=ID10/VM1
+gds1mod=Gds1mod/Gspec1
+Gspec2=Ispec2/UT
+ID20=Ispec2*IC
+VM2=lambdan*Leff2
+Gds2mod=ID20/VM2
+gds2mod=Gds2mod/Gspec2
+Gspec3=Ispec3/UT
+ID30=Ispec3*IC
+VM3=lambdan*Leff3
+Gds3mod=ID30/VM3
+gds3mod=Gds3mod/Gspec3
+
+id1sim=np.zeros(Npts)
+id2sim=np.zeros(Npts)
+id3sim=np.zeros(Npts)
+id1mod=np.zeros(Npts)
+id2mod=np.zeros(Npts)
+id3mod=np.zeros(Npts)
+gds1sim=np.zeros(Npts)
+gds2sim=np.zeros(Npts)
+gds3sim=np.zeros(Npts)
+gds1fit=np.zeros(Npts)
+gds2fit=np.zeros(Npts)
+gds3fit=np.zeros(Npts)
+
+for k in range(0,Npts):
+  id1sim[k]=ID1sim[k]/Ispec1
+  id2sim[k]=ID2sim[k]/Ispec2
+  id3sim[k]=ID3sim[k]/Ispec3
+  id1mod[k]=Gds1mod/Ispec1*(VD[k]+VM1)
+  id2mod[k]=Gds2mod/Ispec2*(VD[k]+VM2)
+  id3mod[k]=Gds3mod/Ispec3*(VD[k]+VM3)
+  gds1sim[k]=Gds1sim[k]/Gspec1
+  gds2sim[k]=Gds2sim[k]/Gspec2
+  gds3sim[k]=Gds3sim[k]/Gspec3
+  gds1fit[k]=gds1mod
+  gds2fit[k]=gds2mod
+  gds3fit[k]=gds3mod
+
+fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(8, 3), constrained_layout=True)
+
+axs[0].plot(VD, id1sim, 'ro-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L1/1e-6:.0f} $\\mu m$', markersize=2, markevery=16)
+axs[0].plot(VD, id2sim, 'bD-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L2/1e-6:.0f} $\\mu m$', markersize=2, markevery=16)
+axs[0].plot(VD, id3sim, 'gs-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L3/1e-6:.0f} $\\mu m$', markersize=2, markevery=16)
+#axs[0].plot(VD, id1mod, 'r--')
+#axs[0].plot(VD, id2mod, 'b--')
+#axs[0].plot(VD, id3mod, 'g--')
+axs[0].set_xlabel('$V_D$ [V]')
+axs[0].set_xlim(VDmin,VDmax)
+#axs[0].set_xticks(np.arange(0,1.6,0.2))
+axs[0].set_ylabel('$IC$ [-]')
+axs[0].set_ylim(0,1.5)
+#axs[0].legend(loc='upper left')
+axs[0].text(0.65, 0.05, mosinfo, ha='left', va='bottom', transform=axs[0].transAxes, size=9,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogy(VD, gds1sim, 'ro-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L1/1e-6:.0f} $\\mu m$', markersize=2, markevery=10)
+axs[1].semilogy(VD, gds2sim, 'bD-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L2/1e-6:.0f} $\\mu m$', markersize=2, markevery=10)
+axs[1].semilogy(VD, gds3sim, 'gs-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L3/1e-9:.0f} $nm$', markersize=2, markevery=10)
+axs[1].semilogy(VD, gds1fit, 'r--')
+axs[1].semilogy(VD, gds2fit, 'b--')
+axs[1].semilogy(VD, gds3fit, 'g--')
+#axs[1].semilogy(VD, Gdsfit/1e-6, 'k--', label='Fit')
+axs[1].set_xlabel('$V_D$ [V]')
+axs[1].set_xlim(VDmin,VDmax)
+#axs[1].set_xticks(np.arange(0,2.2,0.2))
+axs[1].set_ylabel('$g_{ds}$ [-]')
+axs[1].set_ylim(1e-4,1e0)
+axs[1].legend(loc='upper right')
+#axs[1].text(0.7, 0.95, mosinfo, ha='left', va='top', transform=axs[1].transAxes, size=9,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.show()
+```
+
+The approximation of the output conductance is OK for the long-channel transistor and a bit overestimated for the medium and short channel transistors.
+
+# pMOS
+## $IC$ versus $V_G-V_{T0}$
+
+```{python}
+type='pmos'
+tYPE='pMOS'
+Type='pMOS'
+```
+
+```{python}
+simulationPath="./Simulations/" + type + "/idgmvg/"
+dataPath="./Data/" + type + "/"
+fileName = "idgmvg_all"
+dataFile = dataPath + fileName + "_" + type + ".dat"
+paramFile = simulationPath + fileName + ".par"
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+VG=1
+VS=0
+VD=1.8
+
+Npts=1001
+VGmin=-0.5
+VGmax=2
+dVG=(VGmax-VGmin)/(Npts-1)
+
+if newSim:
+    paramstr = '\n'.join((
+      f'.param W1={W/1e-6:.2f}u L1={L1/1e-6:.2f}u',
+      f'.param W2={W/1e-6:.2f}u L2={L2/1e-6:.2f}u',
+      f'.param W3={W/1e-6:.2f}u L3={L3/1e-6:.2f}u',
+      f'.param VG={VG:.1f} VS={VS:.1f} VD={VD:.1f}',
+      f'.csparam VGmin = {VGmin:.3f}',
+      f'.csparam VGmax = {VGmax:.3f}',
+      f'.csparam dVG = {dVG:.3f}'
+    ))
+    # print(paramstr)
+    with open(paramFile, 'w') as f:
+        f.write(paramstr)
+    # print('Starting ngspice simulation...\n')
+    result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+    # We copy the simulation results to the data folder
+    shutil.copy2(simulationData, dataFile)
+```
+
+```{python}
+#| label: fig-id_vgt_pmos
+#| fig-cap: $IC$ versus $V_G-V_{T0}$ of the sEKV model compared to simulations with EKV 2.6 for three different lengths.
+
+df_idgmvg=pd.read_table(dataFile, sep=' +', engine='python')
+VG=df_idgmvg['v-sweep'].to_numpy()
+ID1sim=df_idgmvg['ID1'].to_numpy()
+ID2sim=df_idgmvg['ID2'].to_numpy()
+ID3sim=df_idgmvg['ID3'].to_numpy()
+Gm1sim=df_idgmvg['Gm1'].to_numpy()
+Gm2sim=df_idgmvg['Gm2'].to_numpy()
+Gm3sim=df_idgmvg['Gm3'].to_numpy()
+
+Npts=len(VG)
+VGmin=VG[0]
+VGmax=VG[Npts-1]
+
+Weff=W+DWp
+Leff1=L1+DLp
+Leff2=L2+DLp
+Leff3=L3+DLp
+Ispec1=Ispecsqp*Weff/Leff1
+Ispec2=Ispecsqp*Weff/Leff2
+Ispec3=Ispecsqp*Weff/Leff3
+lambdac1=Lsatp/Leff1
+lambdac2=Lsatp/Leff2
+lambdac3=Lsatp/Leff3
+
+nUT=n0p*UT
+VT0=VT0p
+
+Npts=len(VG)
+logICmin=-3
+logICmax=3
+ICmin=pow(10,logICmin)
+ICmax=pow(10,logICmax)
+ICmod=np.logspace(logICmin,logICmax,Npts,endpoint=True,base=10.0)
+VGT=np.zeros(Npts)
+vps=np.zeros(Npts)
+id1sim=np.zeros(Npts)
+id2sim=np.zeros(Npts)
+id3sim=np.zeros(Npts)
+id1mod=np.zeros(Npts)
+id2mod=np.zeros(Npts)
+id3mod=np.zeros(Npts)
+gms1sim=np.zeros(Npts)
+gms2sim=np.zeros(Npts)
+gms3sim=np.zeros(Npts)
+gms1mod=np.zeros(Npts)
+gms2mod=np.zeros(Npts)
+gms3mod=np.zeros(Npts)
+gmsid1sim=np.zeros(Npts)
+gmsid2sim=np.zeros(Npts)
+gmsid3sim=np.zeros(Npts)
+gmsid1mod=np.zeros(Npts)
+gmsid2mod=np.zeros(Npts)
+gmsid3mod=np.zeros(Npts)
+
+for k in range(0,Npts):
+  id1sim[k]=ID1sim[k]/Ispec1
+  id2sim[k]=ID2sim[k]/Ispec2
+  id3sim[k]=ID3sim[k]/Ispec3
+  VGT[k]=VG[k]-VT0
+  vps[k]=VGT[k]/nUT
+  id1mod[k]=ic_vps_short(vps[k],lambdac1)
+  id2mod[k]=ic_vps_short(vps[k],lambdac2)
+  id3mod[k]=ic_vps_short(vps[k],lambdac3)
+  gms1sim[k]=Gm1sim[k]*nUT/Ispec1
+  gms2sim[k]=Gm2sim[k]*nUT/Ispec2
+  gms3sim[k]=Gm3sim[k]*nUT/Ispec3
+  gms1mod[k]=gms_ic_short(id1mod[k],lambdac1)
+  gms2mod[k]=gms_ic_short(id2mod[k],lambdac2)
+  gms3mod[k]=gms_ic_short(id3mod[k],lambdac3)
+  gmsid1sim[k]=Gm1sim[k]*nUT/ID1sim[k]
+  gmsid2sim[k]=Gm2sim[k]*nUT/ID2sim[k]
+  gmsid3sim[k]=Gm3sim[k]*nUT/ID3sim[k]
+  gmsid1mod[k]=gmsid_ic_short(id1mod[k],lambdac1)
+  gmsid2mod[k]=gmsid_ic_short(id2mod[k],lambdac2)
+  gmsid3mod[k]=gmsid_ic_short(id3mod[k],lambdac3)
+
+fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(8, 3), constrained_layout=True)
+
+axs[0].semilogy(VGT, id1sim, 'ro', markersize=2, markevery=8)
+axs[0].semilogy(VGT, id1mod, 'r-')
+axs[0].semilogy(VGT, id2sim, 'bD', markersize=2, markevery=8)
+axs[0].semilogy(VGT, id2mod, 'b-')
+axs[0].semilogy(VGT, id3sim, 'gs', markersize=2, markevery=8)
+axs[0].semilogy(VGT, id3mod, 'g-')
+axs[0].set_xlabel('$|V_G-V_{T0}|$ [V]')
+axs[0].set_xlim(-0.2,0.8)
+#axs[0].set_xticks(np.arange(-0.5,2.5,0.5))
+axs[0].set_ylabel('$i_d$ [-]')
+axs[0].set_ylim(1e-3,1e3)
+#axs[0].legend(loc='upper left')
+mosinfo = '\n'.join((
+  Type,
+  f'$V_{{T0}} =$ {VT0p/1e-3:.1f} $mV$',
+  f'$n =$ {n0p:.2f}',
+  f'$I_{{specsq}} =$ {Ispecsqp/1e-9:.0f} $nA$',
+  f'$L_{{sat}} =$ {Lsatp/1e-9:.0f} $nA$',
+  f'$\\lambda =$ {lambdap/1e6:.0f} $V/\\mu m$'))
+axs[0].text(0.65, 0.05, mosinfo, ha='left', va='bottom', transform=axs[0].transAxes, size=9,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].plot(VGT, id1sim, 'ro', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L1/1e-6:.0f} $\\mu m$', markersize=2, markevery=8)
+axs[1].plot(VGT, id1mod, 'r-')
+axs[1].plot(VGT, id2sim, 'bD', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L2/1e-6:.0f} $\\mu m$', markersize=2, markevery=8)
+axs[1].plot(VGT, id2mod, 'b-')
+axs[1].plot(VGT, id3sim, 'gs', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L3/1e-9:.0f} $nm$', markersize=2, markevery=8)
+axs[1].plot(VGT, id3mod, 'g-')
+axs[1].set_xlabel('$|V_G-V_{T0}|$ [V]')
+axs[1].set_xlim(-0.2,0.8)
+#axs[1].set_xticks(np.arange(-0.5,2.5,0.5))
+axs[1].set_ylabel('$g_{ms}$ [-]')
+axs[1].set_ylim(0,150)
+axs[1].legend(loc='upper left')
+#axs[1].legend(loc='center left', bbox_to_anchor=(1, 0.5))
+#axs[1].text(0.7, 0.05, mosinfo, ha='left', va='bottom', transform=axs[1].transAxes, size=9,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.show()
+```
+
+The fit is good in weak inversion for the long-channel transistor, however the threshold voltage is too large for the medium and short-channel transistors. This is due to charge-sharing and reverse short-channel effects which increase the threshold voltage for small transistors.
+
+## $G_m$ and $G_m/I_D$ versus $IC$
+
+```{python}
+#| label: fig-gm_id_pmos
+#| fig-cap: $g_{ms}$ and $g_{ms}/i_d$ versus $IC$ of the sEKV model compared to simulations with EKV 2.6 for three different lengths.
+
+fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(8, 3), constrained_layout=True)
+
+axs[0].loglog(id1sim, gms1sim, 'ro', markersize=2, markevery=8)
+axs[0].loglog(id1mod, gms1mod, 'r-')
+axs[0].loglog(id2sim, gms2sim, 'bD', markersize=2, markevery=8)
+axs[0].loglog(id2mod, gms2mod, 'b-')
+axs[0].loglog(id3sim, gms3sim, 'gs', markersize=2, markevery=8)
+axs[0].loglog(id3mod, gms3mod, 'g-')
+axs[0].set_xlabel('$IC$ [-]')
+axs[0].set_xlim(1e-2, 1e2)
+#axs[0].set_xticks(np.arange(-0.5,2.5,0.5))
+axs[0].set_ylabel('$g_{ms}$ [-]')
+axs[0].set_ylim(1e-2,1e1)
+#axs[0].legend(loc='upper left')
+axs[0].text(0.65, 0.05, mosinfo, ha='left', va='bottom', transform=axs[0].transAxes, size=9,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].loglog(id1sim, gmsid1sim, 'ro', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L1/1e-6:.0f} $\\mu m$', markersize=2, markevery=8)
+axs[1].loglog(id1mod, gmsid1mod, 'r-')
+axs[1].loglog(id2sim, gmsid2sim, 'bD', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L2/1e-6:.0f} $\\mu m$', markersize=2, markevery=8)
+axs[1].loglog(id2mod, gmsid3mod, 'b-')
+axs[1].loglog(id3sim, gmsid3sim, 'gs', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L3/1e-9:.0f} $nm$', markersize=2, markevery=8)
+axs[1].loglog(id3mod, gmsid3mod, 'g-')
+axs[1].set_xlabel('$IC$ [-]')
+axs[1].set_xlim(1e-2, 1e2)
+#axs[1].set_xticks(np.arange(-0.5,2.5,0.5))
+axs[1].set_ylabel('$g_{ms}/i_d$ [-]')
+axs[1].set_ylim(1e-2, 2)
+axs[1].legend(loc='lower left')
+#axs[1].legend(loc='center left', bbox_to_anchor=(1, 0.5))
+#axs[1].text(0.7, 0.05, mosinfo, ha='left', va='bottom', transform=axs[1].transAxes, size=9,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.show()
+```
+
+The fit of the normalized source transconductance $g_{ms}$ is good in weak and moderate inversion for all lengths. $g_{ms}$ is a bit overestimated in strong inversion for the long and medium channel transistors. The fit of the normalized $g_{ms}/IC$ characteristic is good in weak and moderate inversion for all three lengths. It is a bit overestimated for the long-channel transistor in strong inversion.
+
+## $G_{ds}$ versus $V_D$
+
+```{python}
+simulationPath="./Simulations/" + type + "/idgdsvd/"
+dataPath="./Data/" + type + "/"
+fileName = "idgdsvd_all"
+dataFile = dataPath + fileName + "_" + type + ".dat"
+paramFile = simulationPath + fileName + ".par"
+simulationFile = simulationPath + fileName + ".cir"
+simulationLog = simulationPath + fileName + ".log"
+simulationData = simulationPath + fileName + ".dat"
+
+IC=1
+vps=vps_ic(IC)
+nUT=n0n*UT
+VG=VT0n+nUT*vps
+
+Npts=1001
+VDmin=0
+VDmax=1
+dVD=(VDmax-VDmin)/(Npts-1)
+
+if newSim:
+    paramstr = '\n'.join((
+      f'.param W1={W/1e-6:.2f}u L1={L1/1e-6:.2f}u',
+      f'.param W2={W/1e-6:.2f}u L2={L2/1e-6:.2f}u',
+      f'.param W3={W/1e-6:.2f}u L3={L3/1e-6:.2f}u',
+      f'.param VG={VG:.1f} VS={VS:.1f} VD={VD:.1f}',
+      f'.csparam VDmin = {VDmin:.3f}',
+      f'.csparam VDmax = {VDmax:.3f}',
+      f'.csparam dVD = {dVD:.3f}'
+    ))
+    #print(paramstr)
+    with open(paramFile, 'w') as f:
+        f.write(paramstr)
+    # print('Starting ngspice simulation...\n')
+    result = subprocess.run(f"""ngspice_con -b -o "{simulationLog}" "{simulationFile}" """, shell=True, capture_output=True, text=True)
+    # We copy the simulation results to the dat folder
+    shutil.copy2(simulationData, dataFile)
+```
+
+```{python}
+#| label: fig-id_vd_pmos
+#| fig-cap: Approximation of the output conductance in saturation for three different lengths.
+
+df_idgdsvd=pd.read_table(dataFile, sep=' +', engine='python')
+VD=df_idgdsvd['v-sweep'].to_numpy()
+ID1sim=df_idgdsvd['ID1'].to_numpy()
+ID2sim=df_idgdsvd['ID2'].to_numpy()
+ID3sim=df_idgdsvd['ID3'].to_numpy()
+Gds1sim=df_idgdsvd['Gds1'].to_numpy()
+Gds2sim=df_idgdsvd['Gds2'].to_numpy()
+Gds3sim=df_idgdsvd['Gds3'].to_numpy()
+
+Npts=len(VD)
+VDmin=VD[0]
+VDmax=VD[Npts-1]
+
+Gspec1=Ispec1/UT
+ID10=Ispec1*IC
+VM1=lambdap*Leff1
+Gds1mod=ID10/VM1
+gds1mod=Gds1mod/Gspec1
+Gspec2=Ispec2/UT
+ID20=Ispec2*IC
+VM2=lambdap*Leff2
+Gds2mod=ID20/VM2
+gds2mod=Gds2mod/Gspec2
+Gspec3=Ispec3/UT
+ID30=Ispec3*IC
+VM3=lambdap*Leff3
+Gds3mod=ID30/VM3
+gds3mod=Gds3mod/Gspec3
+
+id1sim=np.zeros(Npts)
+id2sim=np.zeros(Npts)
+id3sim=np.zeros(Npts)
+id1mod=np.zeros(Npts)
+id2mod=np.zeros(Npts)
+id3mod=np.zeros(Npts)
+gds1sim=np.zeros(Npts)
+gds2sim=np.zeros(Npts)
+gds3sim=np.zeros(Npts)
+gds1fit=np.zeros(Npts)
+gds2fit=np.zeros(Npts)
+gds3fit=np.zeros(Npts)
+
+for k in range(0,Npts):
+  id1sim[k]=ID1sim[k]/Ispec1
+  id2sim[k]=ID2sim[k]/Ispec2
+  id3sim[k]=ID3sim[k]/Ispec3
+  id1mod[k]=Gds1mod/Ispec1*(VD[k]+VM1)
+  id2mod[k]=Gds2mod/Ispec2*(VD[k]+VM2)
+  id3mod[k]=Gds3mod/Ispec3*(VD[k]+VM3)
+  gds1sim[k]=Gds1sim[k]/Gspec1
+  gds2sim[k]=Gds2sim[k]/Gspec2
+  gds3sim[k]=Gds3sim[k]/Gspec3
+  gds1fit[k]=gds1mod
+  gds2fit[k]=gds2mod
+  gds3fit[k]=gds3mod
+
+fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(8, 3), constrained_layout=True)
+
+axs[0].plot(VD, id1sim, 'ro-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L1/1e-6:.0f} $\\mu m$', markersize=2, markevery=16)
+axs[0].plot(VD, id2sim, 'bD-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L2/1e-6:.0f} $\\mu m$', markersize=2, markevery=16)
+axs[0].plot(VD, id3sim, 'gs-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L3/1e-6:.0f} $\\mu m$', markersize=2, markevery=16)
+#axs[0].plot(VD, id1mod, 'r--')
+#axs[0].plot(VD, id2mod, 'b--')
+#axs[0].plot(VD, id3mod, 'g--')
+axs[0].set_xlabel('$V_D$ [V]')
+axs[0].set_xlim(VDmin,VDmax)
+#axs[0].set_xticks(np.arange(0,1.6,0.2))
+axs[0].set_ylabel('$IC$ [-]')
+axs[0].set_ylim(0,1.4)
+#axs[0].legend(loc='upper left')
+axs[0].text(0.65, 0.05, mosinfo, ha='left', va='bottom', transform=axs[0].transAxes, size=9,
+         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+
+axs[1].semilogy(VD, gds1sim, 'ro-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L1/1e-6:.0f} $\\mu m$', markersize=2, markevery=10)
+axs[1].semilogy(VD, gds2sim, 'bD-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L2/1e-6:.0f} $\\mu m$', markersize=2, markevery=10)
+axs[1].semilogy(VD, gds3sim, 'gs-', label=f'$W =$ {W/1e-6:.0f} $\\mu m$, $L =$ {L3/1e-9:.0f} $nm$', markersize=2, markevery=10)
+axs[1].semilogy(VD, gds1fit, 'r--')
+axs[1].semilogy(VD, gds2fit, 'b--')
+axs[1].semilogy(VD, gds3fit, 'g--')
+#axs[1].semilogy(VD, Gdsfit/1e-6, 'k--', label='Fit')
+axs[1].set_xlabel('$V_D$ [V]')
+axs[1].set_xlim(VDmin,VDmax)
+#axs[1].set_xticks(np.arange(0,2.2,0.2))
+axs[1].set_ylabel('$g_{ds}$ [-]')
+axs[1].set_ylim(1e-5,1e0)
+axs[1].legend(loc='upper right')
+#axs[1].text(0.7, 0.95, mosinfo, ha='left', va='top', transform=axs[1].transAxes, size=9,
+#         bbox={'facecolor':'w', 'alpha':1.0, 'pad':5})
+plt.show()
+```
+
+The output conductance is overestimated for all three channel lengths, but particularyl for the short-channel transistors. This will result in an underestimation of the intrinsic gain.
+
+# Conclusion
+The sEKV parameters have been extracted for n- and p-channel transistors for a generic 180 nm bulk CMOS process. The fit of the $IC$ versus $V_G-V_{T0}$ is acceptable for all lengths and for both nMOS and pMOS. The fit of the normalized source transconductance $g_{ms}$ and $g_{ms}/IC$ characteristic are good for all lengths and for both nMOS and pMOS. The approximation of the output conductance is OK for all lengths for nMOS and a bit overestimated for the pMOS.
+
+We will use these parameters for all the examples in the book.
+
+
+::: {.callout-important}
+The overall fit may seem a bit disapointing. However, we have to remember that the goal of the sEKV model is not to replace the compact model, but rather to have an accurate estimation of the transconductances and of the $G_m/I_D$ characteristic for inversion coefficients $IC$ ranging between $10^{-2}$ to $10^{2}$.
+:::
+
