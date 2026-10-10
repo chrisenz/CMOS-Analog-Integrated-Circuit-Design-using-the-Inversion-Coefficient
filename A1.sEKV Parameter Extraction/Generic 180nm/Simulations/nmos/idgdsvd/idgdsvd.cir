@@ -1,0 +1,17 @@
+EKV 2.6 pMOS ID-VD characteristic
+
+.include /Simulations/models/ekv018va.par
+.include idgdsvd.par ; Size and bias values
+.include idgdsvd.net ; Circuit netlist
+
+.control
+ options GMIN=1e-15
+ save all @n1[gds]
+ dc VD $&VDmin $&VDmax $&dVD
+ let ID = -i(vd)
+ let Gds = @n1[gds]
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/idgdsvd.dat ID Gds
+.endc
+.end

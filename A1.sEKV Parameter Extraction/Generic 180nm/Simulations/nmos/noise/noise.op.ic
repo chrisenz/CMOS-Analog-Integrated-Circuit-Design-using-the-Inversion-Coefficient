@@ -1,0 +1,8 @@
+* Intermediate Transient Solution
+* Circuit: ekv 2.6 nmos input-referred noise psd by c. enz
+* Recorded at simulation time: 0
+.ic v(out) = 0.479711
+.ic v(in) = 0.479711
+.ic v(1) = 0.479711
+.ic v(vdd) = 1.8
+.ic v(2) = 0.479711

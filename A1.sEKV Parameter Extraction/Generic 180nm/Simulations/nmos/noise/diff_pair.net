@@ -1,0 +1,12 @@
+N1 out1 in1 1 1 ekvn_va W={W} L={L}
+N2 out2 in2 1 1 ekvn_va W={W} L={L}
+R1 vdd out1 {R}
+R2 vdd out2 {R}
+C1 vdd out1 {CL}
+C2 vdd out2 {CL}
+Iq 1 0 {2*Ib}
+VDD vdd 0 {VDD}
+Vic ic 0 {Vic}
+Vid id 0 DC 0 AC 1
+Ein1 in1 ic id 0 0.5
+Ein2 in2 ic id 0 -0.5

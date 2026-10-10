@@ -1,0 +1,2 @@
+.param VDD=1.2 VG=0.457 RL=17.768k
+.param W=10u L=0.18u

@@ -1,0 +1,21 @@
+EKV 2.6 nMOS ID-VG characteristic
+
+.include /Simulations/models/ekv018va.par
+.include idgmvg_all.par ; Size and bias values
+.include idgmvg_all.net ; Circuit netlist
+
+.control
+ options GMIN=1e-15
+ save all @n1[id] @n2[id] @n3[id] @n1[gm] @n2[gm] @n3[gm]
+ dc VG $&VGmin $&VGmax $&dVG
+ let ID1 = @n1[id]
+ let ID2 = @n2[id]
+ let ID3 = @n3[id]
+ let Gm1 = @n1[gm]
+ let Gm2 = @n2[gm]
+ let Gm3 = @n3[gm]
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/idgmvg_all.dat ID1 ID2 ID3 Gm1 Gm2 Gm3
+.endc
+.end

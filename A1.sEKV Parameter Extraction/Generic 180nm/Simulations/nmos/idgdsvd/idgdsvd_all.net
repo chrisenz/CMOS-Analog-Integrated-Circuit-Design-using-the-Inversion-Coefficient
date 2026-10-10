@@ -1,0 +1,6 @@
+N1 d g s 0 ekvn_va W={W1} L={L1}
+N2 d g s 0 ekvn_va W={W2} L={L2}
+N3 d g s 0 ekvn_va W={W3} L={L3}
+VG g 0 {VG}
+VS s 0 {VS}
+VD d 0 {VD}

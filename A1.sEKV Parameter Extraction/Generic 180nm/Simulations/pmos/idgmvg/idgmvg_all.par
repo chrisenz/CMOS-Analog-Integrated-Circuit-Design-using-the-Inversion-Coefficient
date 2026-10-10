@@ -1,0 +1,7 @@
+.param W1=10.00u L1=10.00u
+.param W2=10.00u L2=1.00u
+.param W3=10.00u L3=0.18u
+.param VG=1.0 VS=0.0 VD=1.8
+.csparam VGmin = -0.500
+.csparam VGmax = 2.000
+.csparam dVG = 0.003

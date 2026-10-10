@@ -1,0 +1,4 @@
+Error: Could not find library file /Simulations/models/cornerMOSlv.lib
+ERROR, library file /Simulations/models/cornerMOSlv.lib not found
+
+ERROR: fatal error in ngspice, exit(1)

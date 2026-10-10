@@ -1,0 +1,20 @@
+EKV 2.6 nMOS input-referred noise PSD by C. Enz
+
+.include /Simulations/models/ekv018va.par
+.include noise.nz.par ; Parameter for the NOISE simulation
+.include size_bias.par ; Size and bias values
+.include noise.net ; Circuit netlist
+
+.control
+ op
+ save inoise_spectrum onoise_spectrum
+ + onoise_n1 onoise_n1_flicker onoise_n1_thermal
+ noise V(out) Vin dec $&Ndec $&fmin $&fmax 1
+ setplot noise1
+ write $inputdir/noise.nz.raw
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/noise.nz.dat inoise_spectrum onoise_spectrum
+.endc
+.end
+

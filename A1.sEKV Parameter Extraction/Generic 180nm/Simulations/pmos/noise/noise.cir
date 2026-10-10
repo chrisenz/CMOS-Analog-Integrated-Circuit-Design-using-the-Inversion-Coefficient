@@ -1,0 +1,24 @@
+EKV 2.6 pMOS noise analysis
+
+.include /Simulations/models/ekv018va.par
+.include noise.par ; Size and bias values
+.include noise.net ; Circuit netlist
+
+.control
+ op
+ save all
+*  save inoise_spectrum onoise_spectrum onoise_n1 onoise_n1_flicker onoise_n1_thermal onoise_rl
+* save inoise_spectrum onoise_spectrum
+* + onoise_n1
+* + onoise_n1_flicker
+* + onoise_n1_thermal
+ noise V(out) Vin dec $&decPts $&fmin $&fmax
+ setplot noise1
+ write $inputdir/diff_pair.nz.raw
+ setplot noise1
+ write $inputdir/noise.raw
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/noise.dat inoise_spectrum onoise_spectrum
+.endc
+.end

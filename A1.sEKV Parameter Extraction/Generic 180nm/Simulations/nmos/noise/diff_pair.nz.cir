@@ -1,0 +1,19 @@
+Simulation of the resistively loaded differential pair by C. Enz
+
+.include ekv018va.par ; model file for EKV2.6
+.include size_bias.par ; Size and bias values
+.include diff_pair.net ; Circuit netlist
+
+.control
+ op
+* save all
+ save inoise_spectrum onoise_spectrum onoise_n1 onoise_n2 onoise_n1_flicker onoise_n2_flicker onoise_n1_thermal onoise_n2_thermal
+ + onoise_r1 onoise_r2
+ noise V(out2,out1) Vid dec 101 1 1G 1
+ setplot noise1
+ write $inputdir/diff_pair.nz.raw
+ set wr_singlescale
+ set wr_vecnames
+ wrdata $inputdir/diff_pair.nz.dat inoise_spectrum onoise_spectrum
+.endc
+.end
