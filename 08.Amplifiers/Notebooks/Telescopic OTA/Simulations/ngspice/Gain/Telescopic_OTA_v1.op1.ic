@@ -1,0 +1,19 @@
+* Intermediate Transient Solution
+* Circuit: simulation of the telescopic ota designed with the ekv 2.6 model by c. enz
+* Recorded at simulation time: 0
+.ic v(3) = 0.62331
+.ic v(inp) = 0.9
+.ic v(1) = 0.403067
+.ic v(4) = 0.62331
+.ic v(inn) = 0.9
+.ic v(5) = 1.26856
+.ic v(2) = 0.879427
+.ic v(vdd) = 1.8
+.ic v(6) = 1.26856
+.ic v(vb1) = 1.2
+.ic v(out) = 0.879427
+.ic v(vb2) = 0.7
+.ic v(8) = 0.354824
+.ic v(7) = 0.777324
+.ic v(ic) = 0.9
+.ic v(id) = 0

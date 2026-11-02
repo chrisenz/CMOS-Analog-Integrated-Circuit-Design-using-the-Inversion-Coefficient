@@ -1,0 +1,7 @@
+.param VDD=1.8 Vic=0.900 Vos=0.136u Vb1=1.2 Vb2=0.7 Ib=250n
+.param CL=1p Rb=845k
+.param W1=8.52u L1=2.52u
+.param W2=0.20u L2=6.15u
+.param W3=1.58u L3=0.54u
+.param W4=6.70u L4=0.54u
+.param W5=0.20u L5=6.69u
