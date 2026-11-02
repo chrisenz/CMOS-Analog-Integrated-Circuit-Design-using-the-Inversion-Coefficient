@@ -602,7 +602,8 @@ We will design the simple OTA for a generic 180nm bulk CMOS process. The physica
 #| label: tbl-physics_param
 #| tbl-cap: Physical parameters
 
-from tsmc018_sekv_ekv2p6 import *
+#from tsmc018_sekv_ekv2p6 import *
+from generic018_sekv_param import *
 
 table = [["$T$",f'{T:.0f}',"$K$"],
          ["$U_T$",f'{UT/1e-3:.3f}',"$mV$"]
@@ -620,8 +621,6 @@ Markdown(tabulate(
 ```{python}
 #| label: tbl-process_param
 #| tbl-cap: Global process parameters
-
-from tsmc018_sekv_ekv2p6 import *
 
 table = [["$V_{DD}$",f'{VDD:.1f}',"$V$"],
          ["$C_{ox}$",f'{Cox*1e3:.3f}',"$\\frac{fF}{\\mu m^2}$"],
@@ -641,8 +640,6 @@ Markdown(tabulate(
 ```{python}
 #| label: tbl-mos_param
 #| tbl-cap: Transistor process parameters
-
-from tsmc018_sekv_ekv2p6 import *
 
 table = [["sEKV parameters"],
          ["$n$",f'{n0n:.2f}',f'{n0p:.2f}',"-"],
@@ -692,7 +689,6 @@ In Spice, the symbols $W$ and $L$ correspond to the *drawn* width and length. As
 where usually $\Delta L$ has a negative sign as shown in @tbl-mos_param. However, $\Delta W$ may be positive or negative. In the special case of this generic 180 nm CMOS process, it is positive as shown in @tbl-mos_param.
 :::
 
-
 ## Design procedure
 
 ::: {.callout-important}
@@ -700,7 +696,11 @@ For this process, the transistor dimensions are rounded to 10nm.
 :::
 
 ### Sizing of M~1a~-M~1b~
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M1a-M1b
 Ibmin=2*pi*n0n*UT*CL*GBWspec
 SRmin=Ibmin/CL
@@ -717,6 +717,8 @@ Weff1=WoverL1*Leff1
 W1=Weff1-DWn
 W1=round(1E8*W1)/1E8
 ```
+
+:::
 
 M~1a~-M~1b~ are biased in weak inversion in order to minimize the input-referred offset. They are sized according to the specification on the GBW and the load capacitance and the required slew-rate.
 
@@ -754,7 +756,11 @@ with $V_{Mi} = \lambda_i \cdot L_i$. Note that this model of the output conducta
 
 A good trade-off for the output conductance is to set $G_{ds1b}=G_{ds2b}$ or since M~1a~-M~2b~ share the same bias current $V_{M1b} = V_{M2b}$. The minimum length of M~1a~-M~1b~ is then given by $L_1 =$ `{python} f'{L1/1e-6:.2f}'` $\mu m$, which gives a width $W_1 =$ `{python} f'{W1/1e-6:.2f}'` $\mu m$.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Recomputing Gm1 and effective GBW
 Weff1=W1+DWn
 Leff1=L1+DLn
@@ -765,10 +771,16 @@ Gm1=Gspec1*gms_ic(IC1)
 GBW=Gm1/(2*np.pi*CL)
 ```
 
+:::
+
 We can recompute the transconductance and gain-bandwidth product for the chosen dimensions of M~1a~-M~1b~. The specific current is $I_{spec1} =$ `{python} f'{Ispec1/1e-6:.1f}'` $\mu A$, the inversion coefficient $IC_1 =$ `{python} f'{IC1:.1f}'`, the specific conductance $G_{spec1} =$ `{python} f'{Gspec1/1e-6:.1f}'` $\mu A/V$, which gives a transconductance $G_{m1} =$ `{python} f'{Gm1/1e-6:.1f}'` $\mu A/V$ and finally a gain-bandwidth product $GBW =$ `{python} f'{GBW/1e6:.1f}'` $MHz$.
 
 ### Sizing of M~3a~-M~3b~
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M3a-M3b
 IC3=20
 VDSsat3=UT*vdssat_ic(IC3)
@@ -783,6 +795,8 @@ L3=Leff3-DLn
 L3=round(1E8*L3)/1E8
 ```
 
+:::
+
 The sizing of M~3a~-M~3b~ is conditioned by the minimum common-mode input voltage $V_{ic,min}$ to be handled according to
 \begin{equation}
   V_{ic,min} = V_{GS1} + V_{DSsat3}.
@@ -793,13 +807,19 @@ Because long-channel nMOS transistors have a small threshold voltage in this tec
 We can now size the current mirror M~2a~-M~2b~.
 
 ### Sizing of M~2a~-M~2b~
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 Vicmax=1.2
 VGS1=VT0n+n0n*UT*vps_ic(IC1)
 VDSsat1=UT*vdssat_ic(IC1)
 VSG2=VDD-Vicmax+VGS1-VDSsat1
 IC2=ic_vps((VSG2-VT0p)/(n0p*UT))
 ```
+
+:::
 
 The gate voltage of M~2a~ should be set as low as possible for a given maximum common mode input voltage still keeping M~1a~ in saturation. For a maximum input common-mode voltage $V_{ic,max}$, the source-to-gate voltage of M~2a~ $V_{SG2a}$ is given by
 \begin{equation}
@@ -818,7 +838,11 @@ In this design we have chosen to put M~1a~-M~1b~ in a separate well, hence $V_{S
 \end{equation}
 where $v_p-v_s$ can be estimated from the inversion coefficient $IC_1$. For the chosen $IC_1 =$ `{python} f'{IC1:.1f}'`, this gives $V_{GS1} \cong$ `{python} f'{VGS1/1e-3:.0f}'` $mV$. Setting the maximum input common-mode voltage to $V_{ic,max} =$ `{python} f'{Vicmax:.1f}'` $V$, results in $V_{SG2} =$ `{python} f'{VSG2/1e-3:.0f}'` $mV$, which corresponds to an inversion coefficient $IC_2 =$ `{python} f'{IC2:.1f}'`.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M2a-M2b
 VSG2=VDD/2
 IC2=ic_vps((VSG2-VT0p)/(n0p*UT))
@@ -834,11 +858,17 @@ W2=Weff2-DWp
 W2=round(1E8*W2)/1E8
 ```
 
+:::
+
 Because $V_{SG2}$ also sets the quiescent output voltage, we could slightly increase $V_{SG2}$ so that the quiescent output voltage is set at $V_{DD}/2 =$ `{python} f'{VDD/2:.1f}'` $V$. Choosing $V_{SG2} =$ `{python} f'{VSG2/1e-3:.0f}'` $mV$, corresponds to an inversion coefficient $IC_2 =$ `{python} f'{IC2:.1f}'` and a saturation voltage $V_{DSsat2}  =$ `{python} f'{VDSsat2/1e-3:.0f}'` $mV$. The specific current is then $I_{spec2} =$ `{python} f'{Ispec2/1e-9:.2f}'` $nA$, the aspect ratio $W_2/L_2 =$ `{python} f'{WoverL2:.3f}'`  and the transconductance $G_{m2}  =$ `{python} f'{Gm2/1e-6:.3f}'` $\mu A/V$,
 
 The length of M~2a~-M~2b~ is set by the dc gain similarly to the length of M~1a~-M~1b~ resulting in $L_2 =$ `{python} f'{L2/1e-6:.2f}'` $\mu m$ fro which we get its width $W_2 =$ `{python} f'{W2/1e-9:.0f}'` $nm$, which is smaller than the minimum width $W_{min} =$ `{python} f'{Wmin/1e-9:.0f}'` $nm$.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Final sizing of M2a-M2b
 W2=Wmin
 Weff2=W2+DWp
@@ -849,6 +879,8 @@ Ispec2=Ispecsqp*Weff2/Leff2
 IC2=Ib/Ispec2
 Gm2=Ispec2/(n0p*UT)*gms_ic(IC2)
 ```
+
+:::
 
 We need to set $W_2 = W_{min} =$ `{python} f'{W2/1e-9:.0f}'` $nm$. Keeping the same $W/L$ we get the length $L_2 =$ `{python} f'{L2/1e-6:.2f}'` $\mu m$. Since $L_2$ is longer than the initial value it will not affect the DC gain which should actually be slightly larger. We can evaluate the transconductance $G_{m2}  =$ `{python} f'{Gm2/1e-6:.3f}'` $\mu A/V$.
 
@@ -873,7 +905,11 @@ where $c_{gbi}$ is the normalized gate-to-bulk intrinsic capacitance given by
   c_{gbi} = \frac{n-1}{n} \cdot c_{gsi}.
 \end{equation}
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 Weff2=W2+DWp
 Leff2=L2+DLp
 CGS2=Cox*Weff2*Leff2*cgsi_ic(IC2)+CGSOp*Weff2
@@ -884,6 +920,8 @@ C2=C2WL*Weff2*Leff2+C2W*Weff2
 wp2=Gm2/C2
 fp2=wp2/(2*pi)
 ```
+
+:::
 
 The capacitance at node 2 scales with $W_{eff2}$ and $L_{eff2}$ according to
 \begin{equation}
@@ -899,7 +937,11 @@ This results in $C_{GS2} =$ `{python} f'{CGS2/1e-15:.2f}'` $fF$, $C_{GB2} =$ `{p
 
 In case we want to push the non-dominant pole even further away from the GBW, we need to reduce $IC_2$ which will increase the $G_m/I_D$ and since the current is set by the bias current $I_b$, it will increase $G_{m2}$. If $W_2$ is set to its minimum value $W_{min}$, decreasing $IC_2$ keeping the same current, will increase the $W_2/L_2$. With $W_2$ set, this leads to a decrease of $L_2$ and hence a decrease of $C_2$. The increase of $G_{m2}$ and decrease of $C_2$ leads to an increase of $f_{p2}$, as required. We can use the following script to find the required $IC$ for having the non-dominant pole at 10 times the $GBW$.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 from scipy.optimize import fsolve
 
 def f(IC):
@@ -937,6 +979,8 @@ L2=round(1E8*L2)/1E8
 VSG2=VT0p+n0p*UT*vps_ic(IC2)
 Vicmax=VGS1-VDSsat1-VSG2+VDD
 ```
+
+:::
 
 Running the optimizer results in an inversion coefficient $IC_2 =$ `{python} f'{IC2:.0f}'`, a transconductance $G_{m2}  =$ `{python} f'{Gm2/1e-6:.3f}'` $\mu A/V$, a transconductance ratio $G_{m1}/G_{m2}  =$ `{python} f'{Gm1/Gm2:.3f}'`, an aspect ratio $W_2/L_2 =$ `{python} f'{WoverL2:.3f}'` and finally a width and length $W_2 =$ `{python} f'{W2/1e-9:.0f}'` $nm$ and $L_2 =$ `{python} f'{L2/1e-6:.2f}'` $\mu m$. As expected, the non-dominant pole is $f_{p2} =$ `{python} f'{fp2/1e6:.3f}'` $MHz$ corresponding to the target ratio $f_{p2}/GBW =$ `{python} f'{fp2/GBWspec:.0f}'`. The source-to-gate voltage of M~2~ has been reduced to $V_{SG2} =$ `{python} f'{VSG2/1e-3:.0f}'` $mV$, which slightly increases the maximum input common-mode voltage to $V_{ic,max} =$ `{python} f'{Vicmax:.3f}'` $V$.
 
@@ -1552,7 +1596,7 @@ Markdown(
 
 From @tbl-ng_openloop_voltages, we see that the ouput voltage $V_{outq} =$ `{python} f'{Voutq0/1e-3:.0f}'` $mV$ of the open-loop circuit is close to the input common mode voltage $V_{ic} =V_{DD}/2 =$ `{python} f'{Vic/1e-3:.0f}'` $mV$. Since the operating point is in the high gain region, we don't need to impose an offset voltage to bring the output voltage in the high gain region.
 
-The operating point information for all transistors coming from the EKV2.6 compact model are extracted from the ngspice .op.dat file. The data is split into the large-signal operating informations presented in @tbl-ng_op1, the small-signal operating point informations shown in @tbl-ng_op2 and the noise operating point informations in @tbl-ng_op3.
+The operating point information for all transistors coming from the EKV2.6 compact model are extracted from the ngspice .op.dat file. The data is split into the large-signal operating informations presented in @tbl-ng_op1, the small-signal operating point informations shown in @tbl-ng_op2 and the noise operating point informations in @tbl-ng_op3. They can be compared to the theoretical operating point informations of @tbl-transistor_info1 and @tbl-transistor_info2.
 
 ```{python}
 #| label: tbl-ng_op1
@@ -1884,7 +1928,7 @@ ngspiceDataFile = simulationPath + otaName + version + simtype + "2.dat"
 ngspiceLogFile = simulationPath + otaName + version + simtype + "2.log"
 
 Vidmin=0
-Vidmax=10e-6
+Vidmax=20e-6
 Npts=1001
 dVid=(Vidmax-Vidmin)/(Npts-1)
 
@@ -1942,7 +1986,7 @@ plt.plot(Vidsim/1e-6,Voutsim,'r')
 plt.xlim(Vidmin/1e-6,Vidmax/1e-6)
 #plt.xticks(np.arange(54,76,2))
 plt.xlabel('$V_{id}\\;[\\mu V]$')
-plt.ylim(0.89,0.905)
+plt.ylim(0.89,0.92)
 #plt.yticks(np.arange(0.4,1.5,0.1))
 plt.ylabel('$V_{out}$ [V]')
 #plt.legend(loc='best')
