@@ -1,6 +1,6 @@
 # Design of the Folded-cascode OTA
 
-![Folded-cascode OTA schematic.](08.Amplifiers/Notebooks/Folded%20Cascode%20OTA/Figures/Folded_cascode_ota_schematic.png)
+![Folded-cascode OTA schematic.](/08.Amplifiers/Notebooks/Folded%20Cascode%20OTA/Figures/Folded_cascode_ota_schematic.png)
 
 This notebook presents the analysis, design and simulation of the folded-cascode OTA shown above.
 
