@@ -1,0 +1,19 @@
+* Intermediate Transient Solution
+* Circuit: simulation of the folded cascode ota designed with the ekv 2.6 model by c. enz
+* Recorded at simulation time: 0
+.ic v(4) = 1.18699
+.ic v(inp) = 0.9
+.ic v(1) = 0.389918
+.ic v(5) = 1.18699
+.ic v(inn) = 0.9
+.ic v(2) = 0.916383
+.ic v(vdd) = 1.8
+.ic v(6) = 0.459682
+.ic v(3) = 0.761699
+.ic v(7) = 0.459682
+.ic v(vb2) = 0.6
+.ic v(out) = 0.761699
+.ic v(vb1) = 1
+.ic v(8) = 0.851233
+.ic v(ic) = 0.9
+.ic v(id) = 0

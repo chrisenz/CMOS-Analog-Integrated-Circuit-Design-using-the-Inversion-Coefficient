@@ -1,0 +1,43 @@
+Title: simulation of the folded cascode ota designed with the ekv 2.6 model by c. enz
+Date: Mon Nov  2 16:09:19  2026
+Plotname: Operating Point
+Flags: real
+No. Variables: 17
+No. Points: 1
+Variables:
+	0	v(4)	voltage
+	1	v(1)	voltage
+	2	v(2)	voltage
+	3	v(3)	voltage
+	4	v(5)	voltage
+	5	v(6)	voltage
+	6	v(7)	voltage
+	7	v(8)	voltage
+	8	v(inp)	voltage
+	9	v(out)	voltage
+	10	v(vb1)	voltage
+	11	i(vb1)	current
+	12	v(vb2)	voltage
+	13	i(vb2)	current
+	14	v(vdd)	voltage
+	15	i(vdd)	current
+	16	i(vin)	current
+Values:
+ 0	1.189205712201976e+00
+	3.899209799028438e-01
+	9.063731830737298e-01
+	7.749509504251098e-01
+	1.189439137703943e+00
+	4.575655384165560e-01
+	4.580487736351954e-01
+	8.512326308056113e-01
+	9.000000000000000e-01
+	8.999994257604569e-01
+	1.000000000000000e+00
+	0.000000000000000e+00
+	6.000000000000000e-01
+	0.000000000000000e+00
+	1.800000000000000e+00
+	-2.746131185235917e-06
+	0.000000000000000e+00
+
