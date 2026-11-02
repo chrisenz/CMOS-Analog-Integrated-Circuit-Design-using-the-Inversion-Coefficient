@@ -407,7 +407,7 @@ We will design the symmetrical cascode OTA for a generic 180nm bulk CMOS process
 #| label: tbl-physics_param
 #| tbl-cap: Physical parameters
 
-from tsmc018_sekv_ekv2p6 import *
+from generic018_sekv_param import *
 
 table = [["$T$",f'{T:.0f}',"$K$"],
          ["$U_T$",f'{UT/1e-3:.3f}',"$mV$"]
@@ -425,8 +425,6 @@ Markdown(tabulate(
 ```{python}
 #| label: tbl-process_param
 #| tbl-cap: Global process parameters
-
-from tsmc018_sekv_ekv2p6 import *
 
 table = [["$V_{DD}$",f'{VDD:.1f}',"$V$"],
          ["$C_{ox}$",f'{Cox*1e3:.3f}',"$\\frac{fF}{\\mu m^2}$"],
@@ -446,8 +444,6 @@ Markdown(tabulate(
 ```{python}
 #| label: tbl-mos_param
 #| tbl-cap: Transistor process parameters
-
-from tsmc018_sekv_ekv2p6 import *
 
 table = [["sEKV parameters"],
          ["$n$",f'{n0n:.2f}',f'{n0p:.2f}',"-"],
@@ -521,7 +517,11 @@ We need to start with choosing the curent gain $A_3$. We have seen that having a
 We start sizing the differential pair M~1a~-M~1b~.
 
 ### Sizing the differential pair M~1a~-M~1b~
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M1a-M1b
 Ibmin=2*pi*n0n*UT*CL*GBWspec
 SRmin=Ibmin/CL
@@ -538,6 +538,8 @@ Weff1=WoverL1*Leff1
 W1=Weff1-DWn
 W1=round(1E8*W1)/1E8
 ```
+
+:::
 
 In this example there is no specification on the input-referred white noise. Therefore the transconductance $G_{m1}$ is set by the gain-bandwidth product according to
 \begin{equation}
@@ -568,8 +570,11 @@ As we will see below, the cascode transistors M~4~ and M~7~ will be biased in we
 Before finalizing the sizing of the differential pair, we first will size the current mirrors.
 
 ### Sizing the pMOS current mirrors M~2a~-M~2c~ and M~2b~-M~2d~
-
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 Vicmax=1.3
 VGS1=VT0n+n0n*UT*vps_ic(IC1)
 VDSsat1=UT*vdssat_ic(IC1)
@@ -577,13 +582,19 @@ VSG2=VDD-Vicmax+VGS1-VDSsat1
 IC2=ic_vps((VSG2-VT0p)/(n0p*UT))
 ```
 
+:::
+
 The gate voltage of M~2a~-M~2c~ and M~2a~-M~2b~ should be set as low as possible for a given maximum common mode input voltage $V_{ic,max}$ still keeping M~1a~-M~1b~ in saturation. The source-to-gate voltage of M~2a~-M~2b~ $V_{SG2}$ is given by
 \begin{equation}
   V_{SG2} = V_{DD} - V_{ic,max} + V_{GS1} - V_{DSsat1}.
 \end{equation}
 The gate-to-source voltage $V_{GS1}$ and the saturation voltage $V_{DSsat1}$ of M~1a~-M~1b~ are given by $V_{GS1} =$ `{python} f'{VGS1/1e-3:.0f}'` $mV$ and $V_{DSsat1}  =$ `{python} f'{VDSsat1/1e-3:.0f}'` $mV$. For a maximum input common-mode voltage $V_{ic,max} =$ `{python} f'{Vicmax:.1f}'` $V$, the minimum source-to-gate voltage is given by $V_{SG2} =$ `{python} f'{VSG2/1e-3:.0f}'` $mV$, corresponding to an inversion coefficient $IC_2 =$ `{python} f'{IC2:.3f}'`.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 VSG2=0.8
 IC2=ic_vps((VSG2-VT0p)/(n0p*UT))
 VDSsat2=UT*vdssat_ic(IC2)
@@ -592,9 +603,15 @@ Gm2=Ispec2/(n0p*UT)*gms_ic(IC2)
 WoverL2=Ispec2/Ispecsqp
 ```
 
+:::
+
 We can set $V_{SG2}$ to `{python} f'{VSG2/1e-3:.0f}'` $mV$ which corresponds to an inversion coefficient $IC_2 =$ `{python} f'{IC2:.3f}'` and a saturation voltage $V_{DSsat2}  =$ `{python} f'{VDSsat2/1e-3:.0f}'` $mV$. The specific current $I_{spec}$, aspect ratio and transconductance are then given by $I_{spec2} =$ `{python} f'{Ispec2/1e-9:.2f}'` $nA$, $W_2/L_2 =$ `{python} f'{WoverL2:.3f}'` and $G_{m2}  =$ `{python} f'{Gm2/1e-6:.3f}'` $\mu A/V$.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M2a-M2c M2b-M2d
 fp2GBW=10
 fp2=fp2GBW*GBW
@@ -610,6 +627,8 @@ Leff2=Weff2/WoverL2
 L2=Leff2-DLp
 L2=round(1E8*L2)/1E8
 ```
+
+:::
 
 We now have to make sure that the non-dominant poles $f_{p2}$ and $f_{p4}$ at nodes 2 and 4 are sufficiently higher than the GBW to insure the desired phase margin. The non-dominant pole is given by
 \begin{equation}
@@ -659,7 +678,11 @@ We next size the nMOS current mirror M~3a~ and M~3b~.
 ### Sizing the nMOS current mirror M~3a~ and M~3b~
 To size M~3a~ and M~3b~ we need to consider the output swing and make sure that M~2c~ remains in saturation for the chosen overdrive voltage chosen for M~3a~.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M3a-M3b
 Vosw=1
 Vomin=(VDD-Vosw)/2
@@ -675,6 +698,8 @@ Gm3=Ispec3/(n0p*UT)*gms_ic(IC3)
 WoverL3=Ispec3/Ispecsqn
 ```
 
+:::
+
 Let's start maximizing the output swing assuming that we bias the cascode transistor M~7~ in weak inversion for minimum saturation voltage and maximum $G_m/I_D$. We set the inversion coefficient of M~7~ to $IC_7 =$ `{python} f'{IC7:.1f}'`. The saturation voltage of M~7~ is then given by $V_{DSsat7}  =$ `{python} f'{VDSsat7/1e-3:.0f}'` $mV$.
 
 Let's say that we want an output swing of  `{python} f'{Vosw:.0f}'` $V$. This means that we have  `{python} f'{(VDD-Vosw)/1e-3:.0f}'` $mV$ to share between the positive and negative saturation voltages which we decide to split equally. This means  `{python} f'{(VDD-Vosw)/2/1e-3:.0f}'` $mV$ for the saturation voltages of M~7~ and M~3b~ which leaves a saturation voltage for M~3b~ of $V_{DSsat3}  =$ `{python} f'{VDSsat3/1e-3:.0f}'` $mV$. This corresponds to an inversion coefficient $IC_3 =$ `{python} f'{IC3:.1f}'`.
@@ -683,7 +708,11 @@ We now can check whether with the chosen inversion coefficient for M~3b~, M~2c~ 
 
 Knowing the current and the inversion coefficient $IC_3 =$ `{python} f'{IC3:.1f}'`, we can deduce $I_{spec3} =$ `{python} f'{Ispec3/1e-9:.3f}'` $nA$, $W_3/L_3 =$ `{python} f'{WoverL3:.1e}'` and $G_{m3} =$ `{python} f'{Gm3/1e-6:.3f}'` $\mu A/V$.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M3a-M3b
 fp3GBW=10
 fp3=fp3GBW*GBW
@@ -699,11 +728,17 @@ L3=Leff3-DLn
 L3=round(1E8*L3)/1E8
 ```
 
+:::
+
 Similarly to what was done for transistor M~2a~-M~2c~, we need to make sure that the non-dominant pole $f_{p3}$ at node 3 remains much higher than the $GBW$. Setting $f_{p3}/GBW=$ `{python} f'{fp3GBW:.0f}'` and proceeding in a similar way we get $f_{p3}/GBW =$ `{python} f'{fp3/GBW:.0f}'` with $C_3 =$ `{python} f'{C3/1e-15:.1f}'` $fF$ resulting in $W_3 =$ `{python} f'{W3/1e-9:.0f}'` $nm$ and $L_3 =$ `{python} f'{L3/1e-6:.2f}'` $\mu m$.
 
 We see that $W_3$ is smaller than the minimum width. If we don't want to increase $W_3\,L_3$ and hence $C_3$, we need to reduce the inversion coefficient $IC_3$. We can find the $IC$ such that $W_3=W_{min}$ for the given $f_{p3}$ by looking at @fig-minimize_c3.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M3a-M3b
 
 from scipy.optimize import fsolve
@@ -741,6 +776,7 @@ wp3=Gm3/C3
 fp3=wp3/(2*pi)
 ```
 
+:::
 
 ```{python}
 #| label: fig-minimize_c3
@@ -797,7 +833,11 @@ The inversion coefficient of M~3a~-M~3b~ is therefore reduced from `{python} f'{
 M~3b~ is identical to M~3a~ and therefore $W_{3a} = W_{3b} =$ `{python} f'{W3/1e-9:.0f}'` $nm$ and $L_{3a} = L_{3b} =$ `{python} f'{L3/1e-6:.2f}'` $\mu m$.
 
 ### Sizing the cascode transistors M~4~-M~7~
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M7
 Go=A3*Gm1/Adc
 Ispec7=Ib/IC7
@@ -817,6 +857,8 @@ Vb2min=VDSsat3+VGS7
 Vb2=VDD/2
 ```
 
+:::
+
 The cascode transistors are sized according to the desired DC gain given by
 \begin{equation}
   A_{dc} = \frac{A_3 \cdot G_{m1}}{G_o}
@@ -834,7 +876,11 @@ the output conductance of of the nMOS and pMOS cascode stages, respectively. The
 
 We already have chosen the length of M~3a~-M~3b~ $L_3 =$ `{python} f'{L3/1e-6:.2f}'` $\mu m$. The output conductance of M~3b~ can then be estimated to $G_{ds3} =$ `{python} f'{Gds3/1e-9:.3f}'` $nA/V$. We can then deduce the output conductance of M~7~ as $G_{ds7} =$ `{python} f'{Gds7/1e-9:.3f}'` $nA/V$ from which we deduce its length $L_7 =$ `{python} f'{L7/1e-6:.2f}'` $\mu m$ which is smaller than the minimum length.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M7
 L7=360e-9
 Leff7=L7+DLn
@@ -842,6 +888,8 @@ Weff7=WoverL7*Leff7
 W7=Weff7-DWn
 W7=round(1E8*W7)/1E8
 ```
+
+:::
 
 To have some margin and avoid DIBL, we choose a slightly longer length $L_7 =$ `{python} f'{L7/1e-9:.0f}'` $nm$ ($L_{eff7} =$ `{python} f'{Leff7/1e-9:.0f}'` $nm$). Keeping the same $W_7/L_7 =$ `{python} f'{WoverL7:.1f}'`, we get $W_7 =$ `{python} f'{W7/1e-6:.2f}'` $\mu m$ ($W_{eff7} =$ `{python} f'{Weff7/1e-6:.2f}'` $\mu m$).
 
@@ -851,7 +899,11 @@ The minimum value of the bias voltage $V_{b2}$ is set such that M~3b~ remains in
 \end{equation}
 The saturation voltage of M~3b~ is equal to $V_{DSsat3} =$ `{python} f'{VDSsat3/1e-3:.0f}'` $mV$ and the $V_{GS}$ voltage of M~7~ is $V_{GS7} \cong$ `{python} f'{VGS7/1e-3:.0f}'` $mV$, which results $V_{b2,min} =$ `{python} f'{Vb2min/1e-3:.0f}'` $mV$. We finally choose $V_{b2} = V_{DD}/2 =$ `{python} f'{Vb2/1e-3:.0f}'` $mV$.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M4
 IC4=IC7
 VDSsat4=UT*vdssat_ic(IC4)
@@ -868,9 +920,15 @@ W4=Weff4-DWp
 W4=round(1E8*W4)/1E8
 ```
 
+:::
+
 For M~4~ we set the same inversion coefficient as M~7~ $IC_4 = IC_7 =$ `{python} f'{IC4:.1f}'`, from which we get its saturation voltage $V_{DSsat4} =$ `{python} f'{VDSsat4/1e-3:.0f}'` $mV$. Knowing the current and the $IC$ we can deduce $I_{spec4} =$ `{python} f'{Ispec4/1e-6:.1f}'` $\mu A$ and $W_4/L_4 =$ `{python} f'{WoverL4:.1f}'`. The source transconductance of M~4~ is then given by $G_{ms4} =$ `{python} f'{Gms4/1e-6:.3f}'` $\mu A/V$. The output conductance of M~2d~ can be estimated as $G_{ds2} =$ `{python} f'{Gds2/1e-9:.3f}'` $nA/V$. We can then deduce the output conductance of M~4~ as $G_{ds4} =$ `{python} f'{Gds4/1e-9:.3f}'` $nA/V$, from which we can calculate the length $L_4 =$ `{python} f'{L4/1e-9:.0f}'` $nm$, which is smaller than the minimum length.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M4
 L4=250e-9
 Leff4=L4+DLp
@@ -879,9 +937,15 @@ W4=Weff4-DWp
 W4=round(1E8*W4)/1E8
 ```
 
+:::
+
 We could choose $L_4 = L_{min}$, but in order to have some margin on the DC gain, we choose $L_4 =$ `{python} f'{L4/1e-9:.0f}'` $nm$ ($L_{eff4} =$ `{python} f'{Leff4/1e-9:.0f}'` $nm$). Keeping the same $W_4/L_4 =$ `{python} f'{WoverL4:.1f}'`, this leads to $W_4 =$ `{python} f'{W4/1e-6:.2f}'` $\mu m$ ($W_{eff4} =$ `{python} f'{Weff4/1e-6:.2f}'` $\mu m$).
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 VSDsat2=UT*vdssat_ic(IC2)
 VSG4=VT0p
 Vb1max=VDD-VSDsat2-VSG4
@@ -889,13 +953,19 @@ Vb1max=VDD-VSDsat2-VSG4
 Vb1=0.7
 ```
 
+:::
+
 The maximum value of the bias voltage $V_{b1}$ is limited by the saturation voltage of M~2d~ according to
 \begin{equation}\label{eqn:}
   V_{b1,max} = V_{DD} - V_{SDsat2d} - V_{SG4}.
 \end{equation}
 The saturation voltage of M~2d~ is $V_{SDsat2} =$ `{python} f'{VSDsat2/1e-3:.0f}'` $mV$ and the source-to-gate voltage of M~4~ is $V_{SG4} \cong$ `{python} f'{VSG4/1e-3:.0f}'` $mV$, leading to $V_{b1,max} \cong$ `{python} f'{Vb1max:.3f}'` $V$. For convenience we could also set $V_{b1} = V_{DD}/2 =$ `{python} f'{Vb1/1e-3:.0f}'` $mV$. However, in the simulations below, we see that the output conductance of M~4~ is too large degrading the DC gain. This can be corrected by increasing the $V_{DS}$ voltage of M~4~ therefore reducing its output conductance allowing to reach the desired DC gain.
 
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Check the resulting DC gain
 Leff3=L3+DLn
 Gds3b=Ib/(lambdan*Leff3)
@@ -919,11 +989,16 @@ Adcest=Gm1/Go
 AdcdBest=20*log(Adcest)
 ```
 
+:::
+
 We can now check the resulting DC gain. The output conductance of the nMOS and pMOS cascodes are $G_{on} =$ `{python} f'{Gon/1e-12:.3f}'` $pA/V$ and $G_{op} =$ `{python} f'{Gop/1e-12:.3f}'` $pA/V$, respectively. This results in a total output conductance $G_o =$ `{python} f'{Go/1e-12:.3f}'` $pA/V$ and a DC gain $A_{dc} =$ `{python} f'{Adcest:.0e}'` or $A_{dc} =$ `{python} f'{AdcdBest:.1f}'` dB, which is `{python} f'{AdcdBest-AdcdB:.1f}'` dB higher than the specifications.
 
 ### Sizing the nMOS current mirror M~5a~-M~5b~
-
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Sizing of M5a-M5b
 Vicmin=0.6
 VGS1=VT0n+n0n*UT*vps_ic(IC1)
@@ -938,6 +1013,8 @@ L5=Leff5-DLn
 L5=round(1E8*L5)/1E8
 ```
 
+:::
+
 Finally we need to size M~5a~-M~5b~. The minimum input common mode voltage $V_{ic,min}$ is limited by the saturation voltage of M~5b~ according to
 \begin{equation}
   V_{ic,min} = V_{GS1} + V_{DSsat5b}.
@@ -949,8 +1026,11 @@ Transistor M~5a~ is identical to M~5b~ and hence $W_{5a} = W_{5b} =$ `{python} f
 The sizing process is almost finished, but we still need to finalize the sizing of the differential pair M~1a~-M~1b~.
 
 ### Final sizing of the differential pair M~1a~-M~1b~
-
+::: {.callout-tip title="Code"}
+The code used for the design is detailed below.
 ```{python}
+#| echo: true
+
 # Final sizing of M1a-M1b
 flickerfactor=1
 WL1=flickerfactor/(rhop/rhon*(Gm2/Gm1)**2*2/(W2*L2)+(Gm3/Gm1)**2/(W3*L3))
@@ -973,6 +1053,8 @@ SninthdBv=10*log(Sninth)
 etafl=2*rhop/rhon*(Gm2/Gm1)**2*Weff1*Leff1/(Weff2*Leff2)+(Gm3/Gm1)**2*Weff1*Leff1/(Weff3*Leff3)
 fk=rhon*Gm1/(W1*L1*gamman1)*(1+etafl)/(1+etath)
 ```
+
+:::
 
 We haven't finalized the sizing of M~1a~-M~1b~. We already have the $W/L$ ratio but still need to set $W_1$ and $L_1$. We don't have any specifications on the noise and particularly the corner frequency, while the white noise is already set by the transconductance $G_{m1}$.
 
@@ -2230,8 +2312,8 @@ simulationData = simulationPath + fileName + ".dat"
 ngspiceDataFile = simulationPath + otaName + version + simtype + "2.dat"
 ngspiceLogFile = simulationPath + otaName + version + simtype + "2.log"
 
-Vidmin=23e-6
-Vidmax=26e-6
+Vidmin=25e-6
+Vidmax=28e-6
 Npts=1001
 dVid=(Vidmax-Vidmin)/(Npts-1)
 
@@ -2287,7 +2369,7 @@ plt.plot([Vidmin/1e-6,Vos/1e-6],[Vic,Vic],'k--', linewidth=lw)
 plt.plot([Vos/1e-6,Vos/1e-6],[0.6,Vic],'k--', linewidth=lw)
 plt.plot([Vidmin/1e-6,Vidmax/1e-6],[Voutmax,Voutmax],'k--', linewidth=lw)
 plt.plot([Vidmin/1e-6,Vidmax/1e-6],[Voutmin,Voutmin],'k--', linewidth=lw)
-plt.plot([24.2,25.7],[Voutmin,Voutmax],'k--', linewidth=lw)
+plt.plot([25.6,27.15],[Voutmin,Voutmax],'k--', linewidth=lw)
 Vswing=Voutmax-Voutmin
 plt.plot(Vidsim/1e-6,Voutsim,'r')
 plt.xlim(Vidmin/1e-6,Vidmax/1e-6)
